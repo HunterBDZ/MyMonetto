@@ -1,13 +1,13 @@
 # Manual de instalação
 
 > [!WARNING]
-> Os instaladores de Windows e Mac são novos: o de Windows já foi instalado num computador de verdade, e o de Mac ainda não passou por nenhum Mac. Guarde um backup e conte o que acontecer numa [issue](https://github.com/HunterBDZ/Financeiro/issues).
+> Os instaladores de Windows e Mac são novos: o de Windows já foi instalado num computador de verdade, e o de Mac ainda não passou por nenhum Mac. Guarde um backup e conte o que acontecer numa [issue](https://github.com/HunterBDZ/MyMonetto/issues).
 
 ## No Windows
 
 Funciona no Windows 10 e 11, de 64 bits. Não pede administrador, e nenhum outro programa precisa ser instalado.
 
-1. Baixe `financeiro-…-windows-x86_64.exe` em [Versões](https://github.com/HunterBDZ/Financeiro/releases/latest).
+1. Baixe `financeiro-…-windows-x86_64.exe` em [Versões](https://github.com/HunterBDZ/MyMonetto/releases/latest).
 2. Dê dois cliques no arquivo.
 3. Se aparecer **"O Windows protegeu o computador"**, clique em **Mais informações** e depois em **Executar assim mesmo**. O aviso aparece porque o instalador ainda não tem assinatura paga, e não porque foi encontrado algum problema.
 4. No fim, deixe marcado **Abrir o Financeiro**. O site abre no navegador.
@@ -26,7 +26,7 @@ Se o Windows 11 bloquear o instalador sem oferecer **Executar assim mesmo**, o *
 
 Funciona em Macs com chip Apple e macOS 12 ou mais novo. **Mac Intel não é atendido:** o FrankenPHP, que roda o site, não tem versão oficial para ele. Nesse caso, use [Docker](#com-docker).
 
-1. Baixe `financeiro-…-macos-arm64.dmg` em [Versões](https://github.com/HunterBDZ/Financeiro/releases/latest) e abra o arquivo.
+1. Baixe `financeiro-…-macos-arm64.dmg` em [Versões](https://github.com/HunterBDZ/MyMonetto/releases/latest) e abra o arquivo.
 2. Arraste o **Financeiro** para **Applications** (Aplicativos).
 3. Abra o Financeiro na pasta Aplicativos. Se abrir de dentro do disco, ele pede para arrastar antes.
 4. Se o Mac disser que **não pode verificar o aplicativo**:
@@ -47,7 +47,7 @@ O aviso aparece porque o aplicativo ainda não tem assinatura paga da Apple. Na 
 
 Funciona em qualquer distribuição de 64 bits, sem `sudo` e sem instalar banco de dados.
 
-1. Baixe o pacote da sua máquina em [Versões](https://github.com/HunterBDZ/Financeiro/releases/latest): `x86_64` na maioria dos computadores, `aarch64` em Raspberry Pi de 64 bits. Se quiser, confira com o `SHA256SUMS` que está junto.
+1. Baixe o pacote da sua máquina em [Versões](https://github.com/HunterBDZ/MyMonetto/releases/latest): `x86_64` na maioria dos computadores, `aarch64` em Raspberry Pi de 64 bits. Se quiser, confira com o `SHA256SUMS` que está junto.
 2. Num terminal, na pasta do download:
    ```sh
    tar xzf financeiro-*-linux-*.tar.gz
@@ -91,7 +91,7 @@ Tudo fica em **Ajustes → Backup e atualização**, com a primeira conta criada
 
 Instalar um pacote mais novo por cima também funciona: os dados ficam, e o banco acompanha ao abrir.
 
-**O programa que roda o site.** O pacote traz junto o FrankenPHP, com o PHP dentro dele. **Atualizar agora** troca só o Financeiro, não esse programa. Por isso, a tela mostra numa linha discreta as versões do FrankenPHP e do PHP. Depois de **Procurar versão nova**, se houver um programa mais novo, aparece o aviso "Há uma versão nova do programa que roda o Financeiro", com o número da versão e o link para [Versões](https://github.com/HunterBDZ/Financeiro/releases). Baixe o instalador dessa versão para o seu sistema e instale por cima, como na primeira vez. Os dados ficam. Vale a pena, porque o PHP antigo deixa de receber correções de segurança. Em servidor e em Docker, a tela não mostra nada disso: o PHP vem do sistema ou da imagem.
+**O programa que roda o site.** O pacote traz junto o FrankenPHP, com o PHP dentro dele. **Atualizar agora** troca só o Financeiro, não esse programa. Por isso, a tela mostra numa linha discreta as versões do FrankenPHP e do PHP. Depois de **Procurar versão nova**, se houver um programa mais novo, aparece o aviso "Há uma versão nova do programa que roda o Financeiro", com o número da versão e o link para [Versões](https://github.com/HunterBDZ/MyMonetto/releases). Baixe o instalador dessa versão para o seu sistema e instale por cima, como na primeira vez. Os dados ficam. Vale a pena, porque o PHP antigo deixa de receber correções de segurança. Em servidor e em Docker, a tela não mostra nada disso: o PHP vem do sistema ou da imagem.
 
 ## Com Docker
 
@@ -114,7 +114,7 @@ Instala Apache e PHP, com HTTPS e o banco num arquivo SQLite, para um computador
 Você precisa de um computador com **Ubuntu 24.04 ou mais novo, Debian 13 ou um derivado deles** (Linux Mint, LMDE), que fique ligado e na sua rede. Nele, rode:
 
 ```sh
-git clone https://github.com/HunterBDZ/Financeiro.git
+git clone https://github.com/HunterBDZ/MyMonetto.git
 sudo bash Financeiro/instalar.sh
 ```
 
@@ -191,15 +191,15 @@ O comando também desliga a verificação em duas etapas dessa conta, se estiver
 | Página padrão do Apache | O site padrão continua ativo | `sudo a2dissite 000-default && sudo systemctl reload apache2` |
 | `Arquivo de configuração não encontrado` | Falta o `.env`, ou o dono está errado | Rode o instalador de novo |
 | `O banco está sem as tabelas` | O `schema.sql` não foi importado | Rode o instalador de novo |
-| `A assinatura da atualização não confere` | O arquivo baixado não veio do projeto, ou veio alterado | O site não mudou. Não insista e [abra uma issue](https://github.com/HunterBDZ/Financeiro/issues) |
+| `A assinatura da atualização não confere` | O arquivo baixado não veio do projeto, ou veio alterado | O site não mudou. Não insista e [abra uma issue](https://github.com/HunterBDZ/MyMonetto/issues) |
 | `Os seus dados são de uma versão mais nova` | Instalou um pacote mais velho que os dados | Instale a versão mais nova |
 | `Faça isso no computador onde o Financeiro está instalado` | Backup, restauração e atualização não passam pelo celular | Abra no próprio computador |
 | `Endereço não reconhecido` | O acesso pela rede está desligado, ou o endereço não é da rede de casa | Abra pelo endereço mostrado no computador. Atrás de outro nome, use `HOSTS_PERMITIDOS` em `config.env` |
 | `outra atualização está rodando` | Dois comandos ao mesmo tempo | Espere o outro terminar |
-| `os testes da versão … falharam no ensaio` | A versão nova não funciona no seu ambiente | O site não mudou. Não insista e [abra uma issue](https://github.com/HunterBDZ/Financeiro/issues) |
+| `os testes da versão … falharam no ensaio` | A versão nova não funciona no seu ambiente | O site não mudou. Não insista e [abra uma issue](https://github.com/HunterBDZ/MyMonetto/issues) |
 | Bloqueado no login | 5 tentativas erradas | Espere 10 minutos |
 | `O código de instalação não confere` | Num servidor ou no Docker, a primeira conta pede o código mostrado no fim da instalação | Veja em `/var/lib/financeiro/primeira-conta.txt` (servidor) ou em `docker compose logs financeiro` (Docker) |
-| No Windows ou no Mac, o navegador abre uma página dizendo que o Financeiro não abriu | O programa não conseguiu iniciar | Reinicie o computador. Se continuar, a página mostra onde está o registro: envie numa [issue](https://github.com/HunterBDZ/Financeiro/issues) |
+| No Windows ou no Mac, o navegador abre uma página dizendo que o Financeiro não abriu | O programa não conseguiu iniciar | Reinicie o computador. Se continuar, a página mostra onde está o registro: envie numa [issue](https://github.com/HunterBDZ/MyMonetto/issues) |
 | `Já está instalada uma versão mais nova` | O instalador é mais velho que o programa | Nada mudou. Baixe a versão mais nova |
 | `Unknown collation: utf8mb4_0900_ai_ci` | O banco é anterior ao MySQL 8 ou ao MariaDB 11.4.5 | Use MySQL 8 ou MariaDB 11.4.5 ou mais novo |
 | Aviso de JIT do PCRE no log | O kernel bloqueia memória JIT | Coloque `pcre.jit=0` no `php.ini` e recarregue o Apache |

@@ -7,8 +7,8 @@
  * $form (não usado aqui: o Lançar é o diálogo do layout), $contasMes (ChecklistContas::fixasAPagar).
  * Com mais de uma conta: $contas (todas, para o filtro), $conta (a filtrada, ou null), $transferencias (as do período,
  * com ↔ e fora dos totais), $saldoConta (o saldo da conta filtrada); $nomesCartao (com mais de um cartão).
- * $acertos (os acertos de saldo do período, com ± e fora do Entrou, do Gastou e da soma do dia), $somaAcertos (a soma
- * deles no período inteiro), $abertura (o saldo com que o mês começou, para a linha do fim e o resumo, ou null).
+ * $acertos (os acertos de saldo do período, com ± e fora do Entrou, do Gastou e da soma do dia; sem coluna no resumo,
+ * que só confundia), $abertura (o saldo com que o mês começou, para a linha do fim e o resumo, ou null).
  * De cima para baixo: o topo (Extrato, o período e o seletor de mês; Importar e a planilha no ⋯), a faixa do período
  * (Entrou, Gasto, as movimentações quando há, e o saldo), os filtros numa linha com a busca (/ foca, extrato.js) e a
  * tabela agrupada por dia, com a soma do dia. "Contas do mês" mora no Início e no Mês: aqui, só a linha discreta da
@@ -46,7 +46,6 @@ $contas = $contas ?? [];
 $conta = $conta ?? null;
 $transferencias = $transferencias ?? [];
 $acertos = $acertos ?? [];
-$somaAcertos = (float) ($somaAcertos ?? 0.0);
 $abertura = $abertura ?? null;
 $nomesCartao = $nomesCartao ?? [];
 $nomeContaDe = [];
@@ -158,8 +157,7 @@ $colunas = 4;
         <section class="faixa-grade ext-resumo" aria-label="<?= e(t('Resumo de {periodo}', ['periodo' => $periodoTxt])) ?>">
             <?php
             $temMov = (float) $totais['mov'] > 0.004;
-            $temAcerto = abs($somaAcertos) >= 0.005;
-            $nCol = 3 + ($temMov ? 1 : 0) + ($filtrado ? 1 : 0) + ($temAcerto ? 1 : 0) + ($abertura !== null ? 1 : 0); ?>
+            $nCol = 3 + ($temMov ? 1 : 0) + ($filtrado ? 1 : 0) + ($abertura !== null ? 1 : 0); ?>
             <dl class="numeros" style="--colunas:<?= $nCol ?>">
                 <?php if ($filtrado): ?>
                     <div><dt><?= e(t('Achados')) ?></dt><dd class="num"><?= e(num((int) $totais['n'], 0)) ?><span class="nota"><?= e(tn((int) $totais['n'], 'lançamento', 'lançamentos')) ?></span></dd></div>
@@ -171,9 +169,6 @@ $colunas = 4;
                 <div><dt><?= e(t('Gastou')) ?></dt><dd data-ex-total="gasto"><?= valor(-(float) $totais['gasto'], 'saida') ?><?php if ((float) ($totais['gasto_ag'] ?? 0) > 0.004): ?><span class="nota"><?= e(t('mais {valor} agendado', ['valor' => num((float) $totais['gasto_ag'])])) ?></span><?php endif; ?></dd></div>
                 <?php if ($temMov): ?>
                     <div><dt><?= e(t('Movimentações')) ?></dt><dd><span class="num ext-v-mov">⇄ <?= valor((float) $totais['mov']) ?></span><span class="nota"><?= e(t('guardado e empréstimo')) ?></span></dd></div>
-                <?php endif; ?>
-                <?php if ($temAcerto): ?>
-                    <div><dt><?= e(t('Acertos')) ?></dt><dd data-ex-total="acertos"><span class="num ext-v-mov"><?= e(($somaAcertos > 0 ? '+' : MENOS) . num(abs($somaAcertos))) ?></span><span class="nota"><?= e(t('com o banco')) ?></span></dd></div>
                 <?php endif; ?>
                 <div><dt><?= e(t('Saldo do período')) ?></dt><dd data-ex-total="soma"><?= valor((float) $totais['soma']) ?><span class="nota"><?= e(t('o que entrou menos o gasto')) ?></span></dd></div>
             </dl>

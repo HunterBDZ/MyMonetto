@@ -11,7 +11,7 @@
 # FIN_VERSAO (o que instalar; o padrão é a última versão publicada).
 set -uo pipefail
 
-REPO_URL=${FIN_REPO:-https://github.com/HunterBDZ/Financeiro.git}
+REPO_URL=${FIN_REPO:-https://github.com/HunterBDZ/MyMonetto.git}
 CLONE=${FIN_DIR:-/opt/financeiro}
 DEST=/var/www/financeiro
 DADOS=/var/lib/financeiro

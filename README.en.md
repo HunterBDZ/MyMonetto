@@ -42,7 +42,7 @@ On Windows, Mac and Linux there is no database or other program to install.
 
 64-bit Windows 10 or 11. It does not ask for administrator rights.
 
-1. Download `financeiro-…-windows-x86_64.exe` from [Releases](https://github.com/HunterBDZ/Financeiro/releases/latest).
+1. Download `financeiro-…-windows-x86_64.exe` from [Releases](https://github.com/HunterBDZ/MyMonetto/releases/latest).
 2. Double-click the file.
 3. If **"Windows protected your PC"** appears, click **More info** and then **Run anyway**.
 4. At the end, leave **Open MyMonetto** checked and create your account in the browser.
@@ -53,7 +53,7 @@ After that, open it from the **Financeiro** icon on the desktop. It starts by it
 
 A Mac with an Apple chip and macOS 12 or newer. Intel Macs are not supported yet.
 
-1. Download `financeiro-…-macos-arm64.dmg` from [Releases](https://github.com/HunterBDZ/Financeiro/releases/latest) and open it.
+1. Download `financeiro-…-macos-arm64.dmg` from [Releases](https://github.com/HunterBDZ/MyMonetto/releases/latest) and open it.
 2. Drag **Financeiro** to **Applications** and open it from there.
 3. If the Mac says it cannot verify the app, open **System Settings → Privacy & Security** and click **Open Anyway**.
 4. Create your account in the browser.
@@ -65,7 +65,7 @@ After that, open Financeiro from Applications. It starts by itself when you sign
 
 ### Linux
 
-Download the package from [Releases](https://github.com/HunterBDZ/Financeiro/releases/latest) and run, without `sudo`:
+Download the package from [Releases](https://github.com/HunterBDZ/MyMonetto/releases/latest) and run, without `sudo`:
 
 ```sh
 tar xzf financeiro-*-linux-*.tar.gz
@@ -78,7 +78,7 @@ Open `http://localhost:8484` and create your account.
 ### Ubuntu or Debian server
 
 ```sh
-git clone https://github.com/HunterBDZ/Financeiro.git
+git clone https://github.com/HunterBDZ/MyMonetto.git
 sudo bash Financeiro/instalar.sh
 ```
 

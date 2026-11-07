@@ -10,7 +10,7 @@
 
 Sem assinatura, sem nuvem e sem pedir a senha do seu banco.
 
-[![Versão 2.1.0](https://img.shields.io/badge/vers%C3%A3o-2.1.0-blue)](CHANGELOG.md) ![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777BB4?logo=php&logoColor=white) ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white) ![Sem dependências](https://img.shields.io/badge/depend%C3%AAncias-nenhuma-success)
+[![Versão 2.1.1](https://img.shields.io/badge/vers%C3%A3o-2.1.1-blue)](CHANGELOG.md) ![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777BB4?logo=php&logoColor=white) ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white) ![Sem dependências](https://img.shields.io/badge/depend%C3%AAncias-nenhuma-success)
 
 [Diferenciais](#diferenciais) · [Telas](#telas) · [Como funciona](#como-funciona) · [Instalar](#instalar) · [Atualizar](#atualizar-e-guardar) · [Documentação](#documentação) · [English](README.en.md)
 
@@ -113,7 +113,7 @@ No Windows, no Mac e no Linux, não há banco de dados nem outro programa para i
 
 Windows 10 ou 11, de 64 bits. Não pede administrador.
 
-1. Baixe `financeiro-…-windows-x86_64.exe` em [Versões](https://github.com/HunterBDZ/Financeiro/releases/latest).
+1. Baixe `financeiro-…-windows-x86_64.exe` em [Versões](https://github.com/HunterBDZ/MyMonetto/releases/latest).
 2. Dê dois cliques no arquivo.
 3. Se aparecer **"O Windows protegeu o computador"**, clique em **Mais informações** e depois em **Executar assim mesmo**.
 4. No fim, deixe marcado **Abrir o MyMonetto** e crie a sua conta no navegador.
@@ -124,7 +124,7 @@ Depois, abra pelo ícone **Financeiro** na área de trabalho. Ele liga sozinho q
 
 Mac com chip Apple e macOS 12 ou mais novo. Mac Intel ainda não é atendido.
 
-1. Baixe `financeiro-…-macos-arm64.dmg` em [Versões](https://github.com/HunterBDZ/Financeiro/releases/latest) e abra o arquivo.
+1. Baixe `financeiro-…-macos-arm64.dmg` em [Versões](https://github.com/HunterBDZ/MyMonetto/releases/latest) e abra o arquivo.
 2. Arraste o **Financeiro** para **Aplicativos** e abra de lá.
 3. Se o Mac disser que não pode verificar o app, abra **Ajustes do Sistema → Privacidade e Segurança** e clique em **Abrir Mesmo Assim**.
 4. Crie a sua conta no navegador.
@@ -136,7 +136,7 @@ Depois, abra pelo Financeiro em Aplicativos. Ele liga sozinho quando você entra
 
 ### Linux
 
-Baixe o pacote em [Versões](https://github.com/HunterBDZ/Financeiro/releases/latest) e rode, sem `sudo`:
+Baixe o pacote em [Versões](https://github.com/HunterBDZ/MyMonetto/releases/latest) e rode, sem `sudo`:
 
 ```sh
 tar xzf financeiro-*-linux-*.tar.gz
@@ -149,7 +149,7 @@ Abra `http://localhost:8484` e crie a sua conta.
 ### Servidor com Ubuntu ou Debian
 
 ```sh
-git clone https://github.com/HunterBDZ/Financeiro.git
+git clone https://github.com/HunterBDZ/MyMonetto.git
 sudo bash Financeiro/instalar.sh
 ```
 

@@ -2400,7 +2400,6 @@ return [
     'Saldo que veio de {mes}' => 'Saldo que vino de {mes}',
     'Acertar saldo com o banco' => 'Ajustar el saldo al banco',
     'Veio de {mes}' => 'Vino de {mes}',
-    'Acertos' => 'Ajustes',
     'Não é gasto nem entrada: acerta o saldo do app com o do banco.' => 'No es gasto ni ingreso: iguala el saldo de la app con el del banco.',
     'Entrou no saldo em' => 'Entró en el saldo el',
     'Acerta o saldo do banco de' => 'Ajusta el saldo del banco del',

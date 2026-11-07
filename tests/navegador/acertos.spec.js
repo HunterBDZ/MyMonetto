@@ -36,7 +36,8 @@ test('Acertar saldo pelo Extrato: o saldo de um dia de outubro (fechado) entra e
     const linha = page.locator('tr.ext-acerto');
     await expect(linha).toContainText('Acerto do saldo de outubro');
     await expect(linha).toContainText('−0,37');
-    await expect(page.locator('[data-ex-total="acertos"]')).toContainText('−0,37');
+    // o resumo não tem coluna de acertos: o acerto aparece só como linha, no dia dele
+    await expect(page.locator('[data-ex-total="acertos"]')).toHaveCount(0);
     // o saldo que veio de outubro não muda: outubro está fechado
     expect(ler(await page.locator('[data-ex-total="abertura"]').innerText())).toBeCloseTo(veio, 2);
 

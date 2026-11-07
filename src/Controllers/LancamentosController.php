@@ -106,7 +106,6 @@ final class LancamentosController
             'conta'      => $b['conta'],
             'transferencias' => $transferencias,
             'acertos'    => $acertos,
-            'somaAcertos' => self::somaAcertos($b),
             'abertura'   => self::abertura($b),
             'saldoConta' => $saldoConta,
             'nomesCartao' => count(CartaoModel::ativos()) > 1 ? array_column(CartaoModel::ativos(), 'nome', 'id') : [],
@@ -177,14 +176,6 @@ final class LancamentosController
         $max = $b['filtro']['max'] ?? null;
         return array_values(array_filter(AcertoModel::listar($de, $ate, $b['conta']['id'] ?? null, $b['q']),
             static fn(array $a): bool => ($min === null || abs((float) $a['valor']) >= $min) && ($max === null || abs((float) $a['valor']) <= $max)));
-    }
-
-    /** A soma dos acertos do período inteiro (para o resumo, mesmo com a lista paginada), com os mesmos filtros. */
-    private static function somaAcertos(array $b): float
-    {
-        $b2 = $b;
-        $lista = self::acertosDoExtrato($b2, [], 0);
-        return round(array_sum(array_map(static fn(array $a): float => (float) $a['valor'], $lista)), 2);
     }
 
     /** O período do extrato: [de, ate], datas inclusivas, null = sem limite. */

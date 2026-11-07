@@ -1770,8 +1770,8 @@ $emTransacao('acerto de saldo', static function () use ($pdo, $check, $render, $
     $check('acerto: depois dele, a conferência bate e não pede outro', $conf !== null && abs($conf['dif']) < 0.005 && $conf['acertos'] === [], json_encode($conf));
 
     $htmlE = $render(LancamentosController::class, 'index', ['mes' => $mesHoje]);
-    $check('acerto: o Extrato mostra o acerto, a soma dos acertos e o saldo que veio do mês anterior', str_contains($htmlE, 'href="/acertos/' . $id . '?')
-        && str_contains($htmlE, 'Acerto com o banco') && str_contains($htmlE, 'data-ex-total="acertos"') && str_contains($htmlE, 'data-ex-abertura')
+    $check('acerto: o Extrato mostra o acerto e o saldo que veio do mês anterior, sem coluna de acertos no resumo', str_contains($htmlE, 'href="/acertos/' . $id . '?')
+        && str_contains($htmlE, 'Acerto com o banco') && !str_contains($htmlE, 'data-ex-total="acertos"') && str_contains($htmlE, 'data-ex-abertura')
         && str_contains($htmlE, 'data-ex-total="abertura"'));
     $vespera = date('Y-m-d', strtotime($mesHoje . ' -1 day'));
     $check('acerto: o saldo que veio do mês anterior é o da véspera', str_contains($htmlE, e(num(LancamentoModel::saldoCalculado($saldoIni, $vespera), 0))) || str_contains($htmlE, e(num(LancamentoModel::saldoCalculado($saldoIni, $vespera)))));

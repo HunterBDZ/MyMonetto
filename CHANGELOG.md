@@ -4,6 +4,11 @@ Cada versão publicada é uma tag `vX.Y.Z` deste repositório. Pacotes atualizam
 
 > **Nota:** a partir do redesenho, o app se chama **MyMonetto**. Os comandos, as pastas de dados e o serviço continuam com o nome antigo (`financeiro`).
 
+## 2.1.1
+
+- **Extrato:** o resumo do mês não tem mais a coluna "Acertos", que confundia. O acerto continua na lista, no dia dele.
+- O link do código-fonte e a busca de versões novas apontam para o repositório com o nome novo, MyMonetto.
+
 ## 2.1.0
 
 **Acerto de saldo com o banco.** Quando o app e o banco não batem por uma diferença que não vale procurar, o app lança a diferença de uma vez, e o saldo volta a bater. A atualização cria uma tabela nova; nada do que já existe muda.

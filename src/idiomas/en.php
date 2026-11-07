@@ -2400,7 +2400,6 @@ return [
     'Saldo que veio de {mes}' => 'Balance carried over from {mes}',
     'Acertar saldo com o banco' => 'Adjust balance to the bank',
     'Veio de {mes}' => 'From {mes}',
-    'Acertos' => 'Adjustments',
     'Não é gasto nem entrada: acerta o saldo do app com o do banco.' => 'Not an expense or income: it matches the app balance to the bank.',
     'Entrou no saldo em' => 'Counted in the balance on',
     'Acerta o saldo do banco de' => 'Adjusts the bank balance of',
