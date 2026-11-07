@@ -4,6 +4,10 @@ Cada versão publicada é uma tag `vX.Y.Z` deste repositório. Pacotes atualizam
 
 > **Nota:** a partir do redesenho, o app se chama **MyMonetto**. Os comandos, as pastas de dados e o serviço continuam com o nome antigo (`financeiro`).
 
+## 2.1.2
+
+- **Extrato:** o resumo do mês termina com o **Saldo** da conta (o que veio do mês anterior, mais o que entrou, menos o que saiu), o mesmo número do banco quando tudo está lançado. No mês de hoje é o saldo de hoje; num mês que terminou, o do último dia; num mês que ainda não chegou, o previsto. O "Saldo do período", que era só o que entrou menos o gasto, fica apenas com busca ou filtro.
+
 ## 2.1.1
 
 - **Extrato:** o resumo do mês não tem mais a coluna "Acertos", que confundia. O acerto continua na lista, no dia dele.

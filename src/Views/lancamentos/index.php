@@ -8,7 +8,9 @@
  * Com mais de uma conta: $contas (todas, para o filtro), $conta (a filtrada, ou null), $transferencias (as do período,
  * com ↔ e fora dos totais), $saldoConta (o saldo da conta filtrada); $nomesCartao (com mais de um cartão).
  * $acertos (os acertos de saldo do período, com ± e fora do Entrou, do Gastou e da soma do dia; sem coluna no resumo,
- * que só confundia), $abertura (o saldo com que o mês começou, para a linha do fim e o resumo, ou null).
+ * que só confundia), $abertura (o saldo com que o mês começou, para a linha do fim e o resumo, ou null), $fechamento
+ * (o "Saldo": o da conta hoje, ou no fim do mês, ou o previsto; null com busca ou filtro, quando fica o "Saldo do
+ * período", o que entrou menos o gasto).
  * De cima para baixo: o topo (Extrato, o período e o seletor de mês; Importar e a planilha no ⋯), a faixa do período
  * (Entrou, Gasto, as movimentações quando há, e o saldo), os filtros numa linha com a busca (/ foca, extrato.js) e a
  * tabela agrupada por dia, com a soma do dia. "Contas do mês" mora no Início e no Mês: aqui, só a linha discreta da
@@ -47,6 +49,7 @@ $conta = $conta ?? null;
 $transferencias = $transferencias ?? [];
 $acertos = $acertos ?? [];
 $abertura = $abertura ?? null;
+$fechamento = $fechamento ?? null;
 $nomesCartao = $nomesCartao ?? [];
 $nomeContaDe = [];
 foreach ($contas !== [] ? $contas : \Financeiro\Models\ContaModel::todas() as $c) {
@@ -170,7 +173,11 @@ $colunas = 4;
                 <?php if ($temMov): ?>
                     <div><dt><?= e(t('Movimentações')) ?></dt><dd><span class="num ext-v-mov">⇄ <?= valor((float) $totais['mov']) ?></span><span class="nota"><?= e(t('guardado e empréstimo')) ?></span></dd></div>
                 <?php endif; ?>
-                <div><dt><?= e(t('Saldo do período')) ?></dt><dd data-ex-total="soma"><?= valor((float) $totais['soma']) ?><span class="nota"><?= e(t('o que entrou menos o gasto')) ?></span></dd></div>
+                <?php if ($fechamento !== null): ?>
+                    <div><dt><?= e(t('Saldo')) ?></dt><dd data-ex-total="saldo"><?= $fechamento['previsto'] ? valor($fechamento['valor'], 'previsto') : valor($fechamento['valor']) ?><?php if ($fechamento['previsto']): ?><span class="nota"><?= e(t('previsto')) ?></span><?php endif; ?></dd></div>
+                <?php else: ?>
+                    <div><dt><?= e(t('Saldo do período')) ?></dt><dd data-ex-total="soma"><?= valor((float) $totais['soma']) ?><span class="nota"><?= e(t('o que entrou menos o gasto')) ?></span></dd></div>
+                <?php endif; ?>
             </dl>
             <?php if (!empty($saldoConta)): ?>
                 <p class="ext-saldo-conta"><?= t('Saldo de {conta} em {data}: {valor}', ['conta' => e(nomeConta($saldoConta['conta'])), 'data' => e(diaMes($saldoConta['data'])), 'valor' => valor((float) $saldoConta['valor'])]) ?></p>

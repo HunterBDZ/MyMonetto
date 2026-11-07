@@ -8,7 +8,9 @@ test('a faixa do período, a tabela por dia e as colunas do livro-razão', async
     const faixa = page.getByRole('region', { name: /^Resumo de Novembro de 2026/ });
     await expect(faixa.getByText('Entrou', { exact: true })).toBeVisible();
     await expect(faixa.getByText('Gastou', { exact: true })).toBeVisible();
-    await expect(faixa.getByText('Saldo do período', { exact: true })).toBeVisible();
+    // o saldo da conta (o que veio do mês anterior, mais o que entrou, menos o que saiu), e não "o que entrou menos o gasto"
+    await expect(faixa.getByText('Saldo', { exact: true })).toBeVisible();
+    await expect(faixa.getByText('Saldo do período', { exact: true })).toHaveCount(0);
 
     const tabela = page.getByRole('table', { name: /Lançamentos de Novembro de 2026/ });
     await expect(tabela.getByRole('columnheader')).toHaveText(['Descrição', 'Categoria', 'Conta', 'Valor']);

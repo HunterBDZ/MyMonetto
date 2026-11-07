@@ -1777,6 +1777,15 @@ $emTransacao('acerto de saldo', static function () use ($pdo, $check, $render, $
     $check('acerto: o saldo que veio do mês anterior é o da véspera', str_contains($htmlE, e(num(LancamentoModel::saldoCalculado($saldoIni, $vespera), 0))) || str_contains($htmlE, e(num(LancamentoModel::saldoCalculado($saldoIni, $vespera)))));
     $htmlF = $render(LancamentosController::class, 'index', ['mes' => $mesHoje, 'q' => 'zzz']);
     $check('acerto: com busca, o Extrato não mostra o saldo do mês anterior', !str_contains($htmlF, 'data-ex-abertura'));
+    // o "Saldo" do resumo é o da conta (o que veio do mês anterior, mais o que entrou, menos o que saiu, com o acerto)
+    $check('Extrato: o "Saldo" do mês de hoje é o saldo da conta hoje, com o acerto', str_contains($htmlE, '<dt>Saldo</dt><dd data-ex-total="saldo">'
+        . valor(round(LancamentoModel::saldoCalculado($saldoIni, $hoje), 2)) . '<') && !str_contains($htmlE, 'Saldo do período'));
+    $mesPassado = date('Y-m-01', strtotime($mesHoje . ' -1 month'));
+    $htmlP = $render(LancamentosController::class, 'index', ['mes' => $mesPassado]);
+    $check('Extrato: num mês que terminou, o "Saldo" é o do último dia', str_contains($htmlP, 'data-ex-total="saldo">'
+        . valor(round(LancamentoModel::saldoCalculado($saldoIni, date('Y-m-t', strtotime($mesPassado))), 2)) . '<'));
+    $check('Extrato: com busca, fica o "Saldo do período" (o que entrou menos o gasto)', !str_contains($htmlF, 'data-ex-total="saldo"')
+        && (str_contains($htmlF, 'data-ex-total="soma"') || !str_contains($htmlF, 'ext-resumo')));
     $htmlM = $render(MesController::class, 'index', ['mes' => $mesHoje]);
     $check('acerto: o Mês mostra a linha do acerto e o livro fecha no fim do mês', str_contains($htmlM, 'data-acerto-saldo')
         && preg_match('/data-livro-fim="(-?[\d.]+)"/', $htmlM, $mm) === 1 && abs((float) $mm[1] - $l1['fica_na_conta']) < 0.01, $mm[1] ?? '');

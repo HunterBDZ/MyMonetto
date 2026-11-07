@@ -107,6 +107,7 @@ final class LancamentosController
             'transferencias' => $transferencias,
             'acertos'    => $acertos,
             'abertura'   => self::abertura($b),
+            'fechamento' => self::fechamento($b),
             'saldoConta' => $saldoConta,
             'nomesCartao' => count(CartaoModel::ativos()) > 1 ? array_column(CartaoModel::ativos(), 'nome', 'id') : [],
             'form'       => LancarForm::dados() + ['modo' => 'pagina', 'pref' => 'pg', 'volta' => $urlAtual, 'topo' => false],
@@ -186,15 +187,14 @@ final class LancamentosController
 
     /**
      * O saldo com que o mês começou ("Saldo que veio de outubro"), para a linha do fim do extrato e o resumo. Só no
-     * modo do mês, sem busca nem filtro além da conta, e na ordem por dia. Mês que já começou: o saldo de fato no fim
-     * da véspera (o mesmo do Início e do Mês fechado). Mês que ainda não começou: o que o plano prevê, só para o total.
+     * modo do mês, sem busca nem filtro além da conta (a linha da lista, só na ordem por dia: a view decide). Mês que
+     * já começou: o saldo de fato no fim da véspera (o mesmo do Início e do Mês fechado). Mês que ainda não começou: o
+     * que o plano prevê, só para o total.
      * @return ?array{valor:float, previsto:bool, mes_anterior:string, primeiro:bool}
      */
     private static function abertura(array $b): ?array
     {
-        $f = $b['filtro'];
-        if ($b['modo'] !== '' || $f['categoria_id'] !== null || $f['classe'] !== null || $b['quem'] > 0 || $b['q'] !== ''
-            || isset($f['min']) || isset($f['max']) || !in_array($b['ordem'], ['', 'dia-asc'], true)) {
+        if (!self::resumoDeSaldo($b)) {
             return null;
         }
         $mes = $b['mes'];
@@ -212,6 +212,43 @@ final class LancamentosController
         }
         $linha = MotorFinanceiro::linhaDoMes($mes);
         return $linha !== null ? ['valor' => round((float) $linha['sobrou_mes_anterior'], 2), 'previsto' => true] + $base : null;
+    }
+
+    /** O resumo pode falar do saldo da conta: o modo do mês, sem busca nem filtro além da conta. */
+    private static function resumoDeSaldo(array $b): bool
+    {
+        $f = $b['filtro'];
+        return $b['modo'] === '' && $f['categoria_id'] === null && $f['classe'] === null && $b['quem'] === 0 && $b['q'] === ''
+            && !isset($f['min']) && !isset($f['max']);
+    }
+
+    /**
+     * O "Saldo" do resumo, no lugar do "Saldo do período" (que é só o que entrou menos o gasto, e o dono lia como o saldo
+     * do banco; ele pediu o quadro só como "Saldo"): no mês de hoje, o saldo de hoje (o mesmo "Em conta hoje" do Início);
+     * num mês que já terminou, o saldo no último dia; num mês que não começou, o que o plano prevê para o fim, só para
+     * o total e com "previsto". É o que veio do mês anterior, mais o que entrou, menos o que saiu (com o guardado e o
+     * adiantado), com os acertos do mês. Mesmas condições de abertura().
+     * @return ?array{valor:float, previsto:bool}
+     */
+    private static function fechamento(array $b): ?array
+    {
+        if (!self::resumoDeSaldo($b)) {
+            return null;
+        }
+        $mes = $b['mes'];
+        $fim = date('Y-m-t', strtotime($mes));
+        $hoje = Relogio::hoje();
+        $conta = $b['conta']['id'] ?? null;
+        if ($mes > $hoje) {
+            if ($conta !== null) {
+                return null;
+            }
+            $linha = MotorFinanceiro::linhaDoMes($mes);
+            return $linha === null ? null : ['valor' => round((float) $linha['fica_na_conta'], 2), 'previsto' => true];
+        }
+        $ate = min($fim, $hoje);
+        $valor = $conta !== null ? ContaModel::saldo($conta, $ate) : LancamentoModel::saldoCalculado(AjusteModel::valor('saldo_ini'), $ate);
+        return ['valor' => round($valor, 2), 'previsto' => false];
     }
 
     /**
