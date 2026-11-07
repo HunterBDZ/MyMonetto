@@ -176,10 +176,18 @@ final class RelatorioDados
         return $guardou > 0.004 ? t('Guardou {guardado}, e entrou o mesmo que saiu.', ['guardado' => money($guardou)]) : t('Entrou o mesmo que saiu.');
     }
 
+    /** O acerto de saldo com o banco do mês, logo depois do "Começou com", quando houver (AcertoModel). */
+    private static function ponteAcerto(array $l): array
+    {
+        $v = round((float) ($l['acerto'] ?? 0.0), 2);
+        return abs($v) >= 0.005 ? [['rotulo' => t('Acerto de saldo com o banco'), 'valor' => $v, 'tipo' => 'mov', 'classe' => $v < 0 ? 'gasto' : 'entrada']] : [];
+    }
+
     /** @return list<array{rotulo:string, valor:float, tipo:string}> uma escada que fecha no centavo */
     private static function ponteEncerrado(array $l): array
     {
         $r = [['rotulo' => t('Começou com'), 'valor' => (float) $l['sobrou_mes_anterior'], 'tipo' => 'inicio', 'classe' => 'total']];
+        $r = array_merge($r, self::ponteAcerto($l));
         $r[] = ['rotulo' => t('Entrou'), 'valor' => (float) $l['entra'], 'tipo' => 'mov', 'classe' => 'entrada'];
         $r[] = ['rotulo' => t('Gastou'), 'valor' => -(float) $l['sai'], 'tipo' => 'mov', 'classe' => 'gasto'];
         return array_merge($r, self::ponteResto($l));
@@ -200,6 +208,7 @@ final class RelatorioDados
             }
         }
         $r = [['rotulo' => t('Começou com'), 'valor' => (float) $l['sobrou_mes_anterior'], 'tipo' => 'inicio', 'classe' => 'total']];
+        $r = array_merge($r, self::ponteAcerto($l));
         $r[] = ['rotulo' => t('Entrou até agora'), 'valor' => $lanEnt, 'tipo' => 'mov', 'classe' => 'entrada'];
         $falta = round((float) $l['entra'] - $lanEnt, 2);
         if (abs($falta) >= 0.005) {

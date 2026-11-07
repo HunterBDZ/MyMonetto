@@ -43,7 +43,9 @@ $movEntra = array_values(array_filter($movimentos, static fn(array $m): bool => 
 $movSai   = array_values(array_filter($movimentos, static fn(array $m): bool => !$m['entra']));
 
 $inicioMes   = isset($linha['sobrou_mes_anterior']) ? (float) $linha['sobrou_mes_anterior'] : 0.0;
-$totEntradas = $inicioMes + array_sum(array_map($valorEnt, $entradas)) + array_sum(array_column($movEntra, 'valor'));
+// o acerto de saldo com o banco do mês (AcertoModel): ajusta o que veio do mês anterior, com sinal
+$acertoMes   = round((float) ($linha['acerto'] ?? 0.0), 2);
+$totEntradas = $inicioMes + $acertoMes + array_sum(array_map($valorEnt, $entradas)) + array_sum(array_column($movEntra, 'valor'));
 $totContas   = array_sum(array_map($valorConta, $contas));
 $totDia      = array_sum(array_map($valorDia, $dia));
 $totGuardado = array_sum(array_column($movSai, 'valor'));
@@ -451,6 +453,14 @@ $fechaJa = $podeFechar && \Financeiro\Models\MesModel::podeFechar($mes, (string)
                     <td class="c-real"><?= $estado === 'previsto' ? '' : valor($inicioMes, 'neutro', ['centavos' => false]) ?></td>
                     <td class="situacao"></td>
                 </tr>
+                <?php if (abs($acertoMes) >= 0.005): ?>
+                    <tr data-acerto-saldo>
+                        <td><span class="cat"><span class="ext-ic ext-transf-ic mes-acerto-ic" aria-hidden="true">±</span><span class="mes-nome"><?= e(t('Acerto de saldo')) ?></span></span></td>
+                        <td class="c-prev"><span class="mes-cel"><?= e($fechado ? t('planejado') : t('previsto')) ?> </span><?= valor($acertoMes, 'previsto', ['centavos' => false]) ?></td>
+                        <td class="c-real"><?= valor($acertoMes, $acertoMes < 0 ? 'saida' : 'entrada', ['centavos' => false]) ?></td>
+                        <td class="situacao"><small class="fraco"><?= e(t('com o banco')) ?></small></td>
+                    </tr>
+                <?php endif; ?>
                 <?php foreach ($entradas as $l) { $linhaEntrada($l); } ?>
                 <?php foreach ($movEntra as $m) { $linhaMov($m); } ?>
 

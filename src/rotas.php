@@ -10,6 +10,7 @@ use Financeiro\Controllers\MetaController;
 use Financeiro\Controllers\CategoriaController;
 use Financeiro\Controllers\FuturoController;
 use Financeiro\Controllers\AjudaController;
+use Financeiro\Controllers\AcertoController;
 use Financeiro\Controllers\AjustesController;
 use Financeiro\Controllers\DuasEtapasController;
 use Financeiro\Controllers\CartaoController;
@@ -61,6 +62,13 @@ $router->post('/transferencias/desfazer', [TransferenciaController::class, 'desf
 $router->get('/transferencias/{id}/editar', [TransferenciaController::class, 'editarForm']);
 $router->post('/transferencias/{id}/excluir', [TransferenciaController::class, 'excluir']);
 $router->post('/transferencias/{id}', [TransferenciaController::class, 'atualizar']);
+// ---- acertos de saldo com o banco
+$router->get('/acertos/novo', [AcertoController::class, 'novo']);
+$router->post('/acertos', [AcertoController::class, 'criar']);
+$router->post('/acertos/conferencia', [AcertoController::class, 'daConferencia']);
+$router->post('/acertos/desfazer', [AcertoController::class, 'desfazer']);
+$router->get('/acertos/{id}', [AcertoController::class, 'ver']);
+$router->post('/acertos/{id}/excluir', [AcertoController::class, 'excluir']);
 $router->get('/importar', [ImportacaoController::class, 'index']);
 $router->post('/importar', [ImportacaoController::class, 'enviar']);
 $router->get('/importar/modelo', [ImportacaoController::class, 'modelo']);

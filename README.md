@@ -10,7 +10,7 @@
 
 Sem assinatura, sem nuvem e sem pedir a senha do seu banco.
 
-[![Versão 2.0.0](https://img.shields.io/badge/vers%C3%A3o-2.0.0-blue)](CHANGELOG.md) ![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777BB4?logo=php&logoColor=white) ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white) ![Sem dependências](https://img.shields.io/badge/depend%C3%AAncias-nenhuma-success)
+[![Versão 2.1.0](https://img.shields.io/badge/vers%C3%A3o-2.1.0-blue)](CHANGELOG.md) ![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777BB4?logo=php&logoColor=white) ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white) ![Sem dependências](https://img.shields.io/badge/depend%C3%AAncias-nenhuma-success)
 
 [Diferenciais](#diferenciais) · [Telas](#telas) · [Como funciona](#como-funciona) · [Instalar](#instalar) · [Atualizar](#atualizar-e-guardar) · [Documentação](#documentação) · [English](README.en.md)
 

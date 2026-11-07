@@ -148,6 +148,7 @@ use Financeiro\Models\PrevisaoModel;
 use Financeiro\Models\UsuarioModel;
 use Financeiro\Models\ContaModel;
 use Financeiro\Controllers\TransferenciaController;
+use Financeiro\Controllers\AcertoController;
 use Financeiro\Services\CartaoVisual;
 use Financeiro\Services\EmprestimoSimulacao;
 use Financeiro\Services\Cotacao;
@@ -1724,6 +1725,111 @@ $emTransacao('fatura com pagamento agendado', static function () use ($pdo, $che
     $depois = $livre();
     $check('fatura com pagamento agendado: a aba Cartão não libera o limite antes do dia', $antes !== '' && $depois === $antes, $antes . ' → ' . $depois);
 });
+
+// ---- 9h3. Acerto de saldo com o banco (s0070): a diferença lançada de uma vez, fora das categorias
+$emTransacao('acerto de saldo', static function () use ($pdo, $check, $render, $mesHoje, $hoje, $uid): void {
+    $pdo->exec('DELETE FROM saldo_conferencias');
+    $saldoIni = AjusteModel::valor('saldo_ini');
+    $conta = ContaModel::padrao();
+    $plano0 = MotorFinanceiro::calcularPlano();
+    $emConta0 = LancamentoModel::saldoCalculado($saldoIni, $hoje);
+    $tot0 = LancamentoModel::totais($mesHoje, []);
+
+    // uma diferença de centavos "bate" (até 0,50), mas a conferência oferece o acerto
+    \Financeiro\Models\SaldoConferenciaModel::registrar($hoje, round($emConta0 - 0.37, 2), $uid);
+    $conf = DashboardController::conferenciaAtual($hoje);
+    $check('acerto: diferença de centavos bate, mas a conferência oferece o acerto', $conf !== null && $conf['bate']
+        && abs((float) ($conf['acertos'][$conta]['valor'] ?? 0) + 0.37) < 0.005 && ($conf['acertos'][$conta]['data'] ?? '') === $hoje, json_encode($conf));
+    $previa = AcertoController::previa([$conta => round($emConta0 - 0.37, 2)], $hoje);
+    $check('acerto: a prévia do Extrato faz a mesma conta', abs((float) $previa[$conta]['acerto'] + 0.37) < 0.005 && $previa[$conta]['entra'] === $hoje, json_encode($previa));
+    $check('acerto: sem diferença, nada a acertar', AcertoController::sugestao(0.004) === null && AcertoController::sugestao(-0.37) === -0.37
+        && AcertoController::sugestao(25.0, 25.0) === null && AcertoController::sugestao(25.37, 25.0) === 0.37);
+
+    $id = \Financeiro\Models\AcertoModel::criar(AcertoController::dataPara($hoje), $hoje, $conta, -0.37, '', $uid);
+    MotorFinanceiro::limparCache();
+    $plano1 = MotorFinanceiro::calcularPlano();
+    $l0 = $plano0[$mesHoje];
+    $l1 = $plano1[$mesHoje];
+    [$e0, $s0] = MotorFinanceiro::balancoTotal($l0);
+    [$e1, $s1] = MotorFinanceiro::balancoTotal($l1);
+    $check('acerto: o saldo de hoje e o da conta mudam o valor do acerto', abs(LancamentoModel::saldoCalculado($saldoIni, $hoje) - $emConta0 + 0.37) < 0.005
+        && abs(array_sum(ContaModel::saldos($hoje)) - LancamentoModel::saldoCalculado($saldoIni, $hoje)) < 0.005);
+    // sem o adiantamento automático do empréstimo, que o plano ajusta para o mês fechar na reserva
+    $semAuto = static fn(array $l): float => (float) $l['fica_na_conta'] + (float) $l['amortizacao_auto'];
+    $check('acerto: o plano conta o acerto no mês, no balanço e no fim do mês', abs($l1['acerto'] + 0.37) < 0.005 && abs($semAuto($l1) - $semAuto($l0) + 0.37) < 0.005
+        && abs(($s1 - $l1['amortizacao_auto']) - ($s0 - $l0['amortizacao_auto']) - 0.37) < 0.005 && abs($e1 - $e0) < 0.005
+        && abs($l1['sobrou_mes_anterior'] - $l0['sobrou_mes_anterior']) < 0.005,
+        json_encode([$l0['fica_na_conta'], $l1['fica_na_conta'], $l0['amortizacao_auto'], $l1['amortizacao_auto'], $s0, $s1]));
+    $tot1 = LancamentoModel::totais($mesHoje, []);
+    $check('acerto: não é renda nem gasto (Entrou, Gastou e o plano das categorias iguais)', abs($tot1['entrada'] - $tot0['entrada']) < 0.005 && abs($tot1['gasto'] - $tot0['gasto']) < 0.005
+        && abs($l1['entra'] - $l0['entra']) < 0.005 && abs($l1['sai'] - $l0['sai']) < 0.005);
+    $s = \Financeiro\Services\Sobra::ateHoje($mesHoje);
+    $check('acerto: as somas do Início continuam fechando', abs($l1['sobrou_mes_anterior'] + $s['sobra'] - LancamentoModel::saldoCalculado($saldoIni, $hoje)) < 0.005,
+        json_encode([$l1['sobrou_mes_anterior'], $s['sobra']]));
+    $conf = DashboardController::conferenciaAtual($hoje);
+    $check('acerto: depois dele, a conferência bate e não pede outro', $conf !== null && abs($conf['dif']) < 0.005 && $conf['acertos'] === [], json_encode($conf));
+
+    $htmlE = $render(LancamentosController::class, 'index', ['mes' => $mesHoje]);
+    $check('acerto: o Extrato mostra o acerto, a soma dos acertos e o saldo que veio do mês anterior', str_contains($htmlE, 'href="/acertos/' . $id . '?')
+        && str_contains($htmlE, 'Acerto com o banco') && str_contains($htmlE, 'data-ex-total="acertos"') && str_contains($htmlE, 'data-ex-abertura')
+        && str_contains($htmlE, 'data-ex-total="abertura"'));
+    $vespera = date('Y-m-d', strtotime($mesHoje . ' -1 day'));
+    $check('acerto: o saldo que veio do mês anterior é o da véspera', str_contains($htmlE, e(num(LancamentoModel::saldoCalculado($saldoIni, $vespera), 0))) || str_contains($htmlE, e(num(LancamentoModel::saldoCalculado($saldoIni, $vespera)))));
+    $htmlF = $render(LancamentosController::class, 'index', ['mes' => $mesHoje, 'q' => 'zzz']);
+    $check('acerto: com busca, o Extrato não mostra o saldo do mês anterior', !str_contains($htmlF, 'data-ex-abertura'));
+    $htmlM = $render(MesController::class, 'index', ['mes' => $mesHoje]);
+    $check('acerto: o Mês mostra a linha do acerto e o livro fecha no fim do mês', str_contains($htmlM, 'data-acerto-saldo')
+        && preg_match('/data-livro-fim="(-?[\d.]+)"/', $htmlM, $mm) === 1 && abs((float) $mm[1] - $l1['fica_na_conta']) < 0.01, $mm[1] ?? '');
+    $ponte = (new \ReflectionMethod(RelatorioDados::class, 'ponteAcerto'))->invoke(null, $l1);
+    $check('acerto: o Relatório põe o acerto na escada do mês', count($ponte) === 1 && abs($ponte[0]['valor'] + 0.37) < 0.005);
+    $_SERVER['REQUEST_URI'] = '/acertos/' . $id;
+    $_GET = [];
+    ob_start();
+    (new AcertoController())->ver((string) $id);
+    $htmlV = (string) ob_get_clean();
+    $check('acerto: abre para ler, com excluir no mês aberto', str_contains($htmlV, 'Acerto com o banco') && str_contains($htmlV, '/acertos/' . $id . '/excluir'));
+    $check('acerto: a conta com acerto não pode ser apagada de vez', ContaModel::temUso($conta));
+    \Financeiro\Models\AcertoModel::excluir($id);
+    MotorFinanceiro::limparCache();
+    $check('acerto: excluir devolve o saldo e a diferença', abs(LancamentoModel::saldoCalculado($saldoIni, $hoje) - $emConta0) < 0.005
+        && abs((float) (DashboardController::conferenciaAtual($hoje)['acertos'][$conta]['valor'] ?? 0) + 0.37) < 0.005);
+
+    // mês fechado não muda: o acerto do saldo de um dia dele entra no 1º dia do mês aberto, e a conferência conta com ele
+    $mesAnt = date('Y-m-01', strtotime($mesHoje . ' -1 month'));
+    if (MesModel::situacao($mesAnt) !== null) {
+        $pdo->exec('DELETE FROM saldo_conferencias');
+        $fimAnt = date('Y-m-t', strtotime($mesAnt));
+        MesModel::setSituacao($mesAnt, 'REAL');
+        MotorFinanceiro::limparCache();
+        $fica0 = MotorFinanceiro::calcularPlano()[$mesAnt]['fica_na_conta'];
+        $appAnt = LancamentoModel::saldoCalculado($saldoIni, $fimAnt);
+        \Financeiro\Models\SaldoConferenciaModel::registrar($fimAnt, round($appAnt + 1.20, 2), $uid);
+        $conf = DashboardController::conferenciaAtual($hoje);
+        $check('acerto em mês fechado: entra no 1º dia do mês aberto', AcertoController::dataPara($fimAnt) === $mesHoje
+            && abs((float) ($conf['acertos'][$conta]['valor'] ?? 0) - 1.20) < 0.005, json_encode($conf));
+        $idF = \Financeiro\Models\AcertoModel::criar(AcertoController::dataPara($fimAnt), $fimAnt, $conta, 1.20, '', $uid);
+        MotorFinanceiro::limparCache();
+        $plano2 = MotorFinanceiro::calcularPlano();
+        $conf = DashboardController::conferenciaAtual($hoje);
+        $check('acerto em mês fechado: o mês fechado não muda, o aberto recebe o acerto', abs($plano2[$mesAnt]['fica_na_conta'] - $fica0) < 0.005
+            && abs(LancamentoModel::saldoCalculado($saldoIni, $fimAnt) - $appAnt) < 0.005 && abs($plano2[$mesHoje]['acerto'] - 1.20) < 0.005);
+        $check('acerto em mês fechado: a conferência daquele dia passa a bater, sem pedir de novo', $conf !== null && abs($conf['dif']) < 0.005 && $conf['acertos'] === [], json_encode($conf));
+        $check('acerto em mês fechado: o nome diz de que mês é o saldo', AcertoController::rotulo(\Financeiro\Models\AcertoModel::find($idF)) === t('Acerto do saldo de {mes}', ['mes' => mesExtenso($mesAnt)]));
+        $check('acerto em mês fechado: excluir num mês fechado é recusado', LancamentosController::erroMesFechado($fimAnt) !== null && LancamentosController::erroMesFechado($mesHoje) === null);
+    } else {
+        $check('acerto: a demonstração tem o mês anterior no plano', false);
+    }
+
+    // várias contas: o acerto fica na conta dele, e a soma das contas continua sendo o saldo
+    $c2 = ContaModel::salvar(null, 'Carteira AC', 'dinheiro', 50.0);
+    MotorFinanceiro::limparCache();
+    \Financeiro\Models\AcertoModel::criar($hoje, $hoje, $c2, -2.5, 'troco', $uid);
+    MotorFinanceiro::limparCache();
+    $check('acerto com várias contas: muda só a conta dele, e a soma das contas é o saldo', abs(ContaModel::saldo($c2, $hoje) - 47.5) < 0.005
+        && abs(array_sum(ContaModel::saldos($hoje)) - LancamentoModel::saldoCalculado(AjusteModel::valor('saldo_ini'), $hoje)) < 0.005);
+});
+ContaModel::limparCache();
+LancarForm::limparCache();
 
 // ---- 9i. As contas fecham: categoria tirada do mês (B-08), a barra no vermelho (B-12), o "por dia" (B-19), o ordinal (B-18)
 $emTransacao('as contas fecham', static function () use ($pdo, $check, $render, $mesHoje, $hoje, $uid): void {

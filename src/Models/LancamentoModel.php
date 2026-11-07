@@ -474,7 +474,7 @@ final class LancamentoModel
         return (float) $stmt->fetchColumn();
     }
 
-    /** Saldo calculado na conta em uma data, a partir do saldo inicial + todos os lançamentos até lá. */
+    /** Saldo calculado na conta em uma data, a partir do saldo inicial + todos os lançamentos e acertos até lá. */
     public static function saldoCalculado(float $saldoInicial, string $ateData): float
     {
         $pdo = Database::connection();
@@ -486,7 +486,8 @@ final class LancamentoModel
         );
         $stmt->execute(['ate' => $ateData]);
         // o saldo inicial de uma conta criada com meses fechados vale a partir da data dele (ContaModel)
-        return $saldoInicial + ContaModel::saldoInicialDatado($ateData) + (float) $stmt->fetchColumn();
+        // e os acertos de saldo do banco (AcertoModel), a partir do dia de cada um
+        return $saldoInicial + ContaModel::saldoInicialDatado($ateData) + (float) $stmt->fetchColumn() + AcertoModel::somaAte($ateData);
     }
 
     /**

@@ -177,7 +177,7 @@ final class ContaModel
     }
 
     /**
-     * O saldo de cada conta no fim do dia $ate (inclusive): saldo inicial + lançamentos + transferências.
+     * O saldo de cada conta no fim do dia $ate (inclusive): saldo inicial + lançamentos + transferências + acertos.
      * @return array<int, float> conta_id => saldo
      */
     public static function saldos(string $ate): array
@@ -207,6 +207,9 @@ final class ContaModel
         foreach ($st->fetchAll() as $r) {
             $out[(int) $r['conta']] = ($out[(int) $r['conta']] ?? 0.0) + (float) $r['total'];
         }
+        foreach (AcertoModel::somaPorConta($ate) as $conta => $v) {
+            $out[$conta] = ($out[$conta] ?? 0.0) + $v;
+        }
         return array_map(static fn(float $v): float => round($v, 2), $out);
     }
 
@@ -216,12 +219,13 @@ final class ContaModel
         return self::saldos($ate)[$id] ?? 0.0;
     }
 
-    /** A conta tem algum lançamento, transferência, cartão ou conferência? (sem nada, pode ser apagada de vez) */
+    /** A conta tem algum lançamento, transferência, cartão, conferência ou acerto? (sem nada, pode ser apagada de vez) */
     public static function temUso(int $id): bool
     {
         $pdo = Database::connection();
         foreach (['SELECT 1 FROM lancamentos WHERE conta_id = :id', 'SELECT 1 FROM transferencias WHERE de_conta_id = :id OR para_conta_id = :id',
-                  'SELECT 1 FROM cartoes WHERE conta_id = :id', 'SELECT 1 FROM saldo_conferencias WHERE conta_id = :id'] as $sql) {
+                  'SELECT 1 FROM cartoes WHERE conta_id = :id', 'SELECT 1 FROM saldo_conferencias WHERE conta_id = :id',
+                  'SELECT 1 FROM acertos_saldo WHERE conta_id = :id'] as $sql) {
             $st = $pdo->prepare($sql . ' LIMIT 1');
             $st->execute(['id' => $id]);
             if ($st->fetchColumn() !== false) {

@@ -4,6 +4,15 @@ Cada versão publicada é uma tag `vX.Y.Z` deste repositório. Pacotes atualizam
 
 > **Nota:** a partir do redesenho, o app se chama **MyMonetto**. Os comandos, as pastas de dados e o serviço continuam com o nome antigo (`financeiro`).
 
+## 2.1.0
+
+**Acerto de saldo com o banco.** Quando o app e o banco não batem por uma diferença que não vale procurar, o app lança a diferença de uma vez, e o saldo volta a bater. A atualização cria uma tabela nova; nada do que já existe muda.
+
+- **Acertar o saldo:** depois de conferir com o banco no Início, qualquer diferença, mesmo de centavos, ganha o botão "Acertar o saldo". No Extrato, o menu ⋯ tem "Acertar saldo com o banco": digite o saldo que o banco mostra numa data, veja a conta e confirme.
+- **Mês fechado não muda:** o acerto do saldo de um dia de mês fechado entra no 1º dia do primeiro mês aberto, como "Acerto do saldo de outubro", e a conferência daquele dia passa a bater.
+- **Não é gasto nem entrada:** o acerto muda o saldo e a previsão do fim do mês, mas fica fora do Entrou, do Gastou, das Metas e do "Para onde foi". Aparece no Extrato com ±, no Mês logo depois do saldo do mês anterior e no Relatório. Dá para excluir, com desfazer.
+- **O saldo que veio do mês anterior:** o Extrato de cada mês abre com "Veio de outubro" no resumo e termina com a linha "Saldo que veio de outubro". Num mês que ainda não chegou, o valor é o previsto.
+
 ## 2.0.0
 
 O app passa a se chamar **MyMonetto**, ganha uma cara nova e aceita várias contas e vários cartões. A atualização muda o banco: o backup feito antes dela é o caminho de volta.

@@ -618,9 +618,15 @@ final class MesController
         } elseif ($prox !== null) {
             $aviso .= ' · ' . t('Os valores previstos de {prox} não mudaram.', ['prox' => mesAno($prox)]);
         }
+        // o saldo do banco não bateu (de um centavo em diante): o Início abre o Conferir, com o botão "Acertar o saldo"
+        $conf = ($saldo !== null || $porConta !== []) ? DashboardController::conferenciaAtual($hoje) : null;
+        $acertos = $conf !== null && $conf['data'] === $dataSaldo ? ($conf['acertos'] ?? []) : [];
+        if ($acertos !== []) {
+            $aviso .= ' · ' . t('O banco mostra uma diferença de {valor}. Para acertar, veja Conferir com o banco.', ['valor' => moneySigned(round(array_sum(array_column($acertos, 'valor')), 2))]);
+        }
         flash('success', $aviso,
             ['url' => '/mes/reabrir', 'label' => t('reabrir'), 'campos' => ['mes' => $mes]]);
-        redirecionar('/', 303);
+        redirecionar($acertos !== [] ? '/?conferir=1#conferir' : '/', 303);
     }
 
     /* ================================================================== POST /mes/reabrir */

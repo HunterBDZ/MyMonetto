@@ -4,6 +4,7 @@ namespace Financeiro\Controllers;
 use Financeiro\Auth;
 use Financeiro\Config;
 use Financeiro\Database;
+use Financeiro\Models\AcertoModel;
 use Financeiro\Models\AjusteModel;
 use Financeiro\Models\ContaModel;
 use Financeiro\Models\LancamentoModel;
@@ -216,7 +217,7 @@ final class DashboardController
         }
 
         SaldoConferenciaModel::registrar($data, $saldo, (int) Auth::id());
-        flash('success', t('Saldo conferido com o banco em {data}.', ['data' => diaMes($data)]));
+        self::avisoConferido($data, $volta);
         redirecionar($volta, 303);
     }
 
@@ -247,8 +248,27 @@ final class DashboardController
         foreach ($saldos as $id => $v) {
             SaldoConferenciaModel::registrar($data, $v, (int) Auth::id(), $id);
         }
-        flash('success', t('Saldo conferido com o banco em {data}.', ['data' => diaMes($data)]));
+        self::avisoConferido($data, $volta);
         redirecionar($volta, 303);
+    }
+
+    /**
+     * O aviso depois de conferir (aqui ou no Fechar o mês): bateu, ou a diferença com o botão "Acertar o saldo", que lança
+     * o acerto da conferência (AcertoController::daConferencia). Qualquer diferença de centavo em diante pode ser acertada.
+     */
+    public static function avisoConferido(string $data, string $volta, ?string $antes = null): void
+    {
+        $conf = self::conferenciaAtual(Relogio::hoje());
+        $acertos = $conf !== null && $conf['data'] === $data ? ($conf['acertos'] ?? []) : [];
+        $msg = ($antes !== null ? $antes . ' · ' : '') . t('Saldo conferido com o banco em {data}.', ['data' => diaMes($data)]);
+        if ($acertos === []) {
+            flash('success', $msg);
+            return;
+        }
+        $soma = round(array_sum(array_column($acertos, 'valor')), 2);
+        flash('warn', $msg . ' · ' . t('Diferença de {valor}.', ['valor' => moneySigned($soma)]), [
+            'url' => '/acertos/conferencia', 'label' => t('Acertar o saldo'), 'campos' => ['volta' => $volta],
+        ]);
     }
 
     /**
@@ -306,10 +326,11 @@ final class DashboardController
             if ($u === null || !$c['ativa']) {
                 continue;
             }
-            $dif = round((float) $u['saldo_informado'] - ContaModel::saldo($c['id'], (string) $u['data']), 2);
+            // o acerto de um mês fechado, que entrou no mês aberto, já conta para esta conferência (AcertoModel::pendentesNa)
+            $dif = round((float) $u['saldo_informado'] - ContaModel::saldo($c['id'], (string) $u['data']) - AcertoModel::pendentesNa((string) $u['data'], $c['id']), 2);
             $agendado = SaldoConferenciaModel::agendadoNa($u);
             $por[$c['id']] = ['conta' => $c, 'data' => (string) $u['data'], 'saldo' => (float) $u['saldo_informado'], 'dif' => $dif,
-                              'bate' => abs($dif) <= 0.5 || abs($dif - $agendado) <= 0.5];
+                              'bate' => abs($dif) <= 0.5 || abs($dif - $agendado) <= 0.5, 'acerto' => AcertoController::sugestao($dif, $agendado)];
         }
         if ($por === []) {
             return null;
@@ -319,6 +340,9 @@ final class DashboardController
         return [
             'data' => $data, 'saldo' => round(array_sum(array_column($por, 'saldo')), 2),
             'dif' => round(array_sum(array_column($difs, 'dif')), 2), 'agendado' => 0.0,
+            // conta_id => o acerto que faria cada conta bater com o banco (só as que têm diferença)
+            'acertos' => array_map(static fn(array $p): array => ['valor' => $p['acerto'], 'data' => $p['data']],
+                array_filter($por, static fn(array $p): bool => $p['acerto'] !== null)),
             'bate' => $difs === [], 'idade' => (int) (new \DateTimeImmutable($data))->diff(new \DateTimeImmutable($hoje))->format('%r%a'),
             'contas' => $por,
         ];
@@ -334,8 +358,10 @@ final class DashboardController
             return null;
         }
         $data = (string) $c['data'];
-        $dif = round((float) $c['saldo_informado'] - LancamentoModel::saldoCalculado($saldoIni, $data), 2);
+        // o acerto de um mês fechado, que entrou no mês aberto, já conta para esta conferência (AcertoModel::pendentesNa)
+        $dif = round((float) $c['saldo_informado'] - LancamentoModel::saldoCalculado($saldoIni, $data) - AcertoModel::pendentesNa($data), 2);
         $agendado = SaldoConferenciaModel::agendadoNa($c);
+        $sugestao = AcertoController::sugestao($dif, $agendado);
         $idade = (int) (new \DateTimeImmutable($data))->diff(new \DateTimeImmutable($hoje))->format('%r%a');
         return [
             'data'     => $data,
@@ -344,6 +370,8 @@ final class DashboardController
             'agendado' => $agendado,
             'bate'     => abs($dif) <= 0.5 || abs($dif - $agendado) <= 0.5,
             'idade'    => $idade,
+            // com uma conta só, ela recebe o acerto (conta_id => valor), como no caso de várias contas
+            'acertos'  => $sugestao !== null ? [ContaModel::padrao() => ['valor' => $sugestao, 'data' => $data]] : [],
         ];
     }
 

@@ -88,8 +88,13 @@ function conferencia(callable $check): void
         $st = $pdo->prepare('SELECT COALESCE(SUM(l.valor * c.sinal), 0) FROM lancamentos l JOIN categorias c ON c.id = l.categoria_id WHERE l.data >= :a AND l.data <= :b');
         $st->execute(['a' => $mes, 'b' => $fim]);
         $fluxo = (float) $st->fetchColumn();
+        if (\Financeiro\Sql::sqlite()) {                        // e os acertos de saldo com o banco do mês (s0070)
+            $st = $pdo->prepare('SELECT COALESCE(SUM(valor), 0) FROM acertos_saldo WHERE data >= :a AND data <= :b');
+            $st->execute(['a' => $mes, 'b' => $fim]);
+            $fluxo += (float) $st->fetchColumn();
+        }
         [, , $bal] = MotorFinanceiro::balancoTotal($l);
-        $check("balanço total {$mes} = Σ sinal·valor", abs($bal - $fluxo) < 0.01, sprintf('%.2f vs %.2f', $bal, $fluxo));
+        $check("balanço total {$mes} = Σ sinal·valor + acertos", abs($bal - $fluxo) < 0.01, sprintf('%.2f vs %.2f', $bal, $fluxo));
     }
     foreach ($plano as $mes => $l) {
         $check("dívida nunca negativa em {$mes}", $l['falta_pagar'] >= -0.005, (string) $l['falta_pagar']);

@@ -3,6 +3,8 @@ namespace Financeiro\Controllers;
 
 use Financeiro\Auth;
 use Financeiro\Database;
+use Financeiro\Models\AcertoModel;
+use Financeiro\Models\AjusteModel;
 use Financeiro\Models\CartaoModel;
 use Financeiro\Models\CategoriaModel;
 use Financeiro\Models\ContaModel;
@@ -50,6 +52,7 @@ final class LancamentosController
         $totais = LancamentoModel::totais($mes, $filtro);
         $filtrado = $b['filtrado'];
         [$transferencias, $saldoConta] = self::transferenciasDoExtrato($b, $linhas, (int) $totais['n']);
+        $acertos = self::acertosDoExtrato($b, $linhas, (int) $totais['n']);
 
         // renda = a mesma palavra e o mesmo número do gráfico (entra do motor), nunca "entrou" (D2)
         $renda = null;
@@ -102,6 +105,9 @@ final class LancamentosController
             'contas'     => $b['contas'],
             'conta'      => $b['conta'],
             'transferencias' => $transferencias,
+            'acertos'    => $acertos,
+            'somaAcertos' => self::somaAcertos($b),
+            'abertura'   => self::abertura($b),
             'saldoConta' => $saldoConta,
             'nomesCartao' => count(CartaoModel::ativos()) > 1 ? array_column(CartaoModel::ativos(), 'nome', 'id') : [],
             'form'       => LancarForm::dados() + ['modo' => 'pagina', 'pref' => 'pg', 'volta' => $urlAtual, 'topo' => false],
@@ -146,6 +152,75 @@ final class LancamentosController
         $max = $b['filtro']['max'] ?? null;
         $lista = array_values(array_filter($lista, static fn(array $t): bool => ($min === null || (float) $t['valor'] >= $min) && ($max === null || (float) $t['valor'] <= $max)));
         return [$lista, $saldo];
+    }
+
+    /**
+     * Os acertos de saldo que entram na lista do extrato, como as transferências: sem filtro de categoria, de grupo nem
+     * de pessoa (eles não têm), na conta filtrada, no período das linhas à vista.
+     * @return list<array>
+     */
+    private static function acertosDoExtrato(array $b, array $linhas, int $total): array
+    {
+        if ($b['filtro']['categoria_id'] !== null || $b['filtro']['classe'] !== null || $b['quem'] > 0) {
+            return [];
+        }
+        [$de, $ate] = self::periodoDoExtrato($b);
+        if ($linhas !== [] && count($linhas) < $total && in_array($b['ordem'], ['', 'dia-asc'], true)) {
+            $ultima = (string) $linhas[count($linhas) - 1]['data'];
+            if ($b['ordem'] === '') {
+                $de = max((string) $de, $ultima);
+            } else {
+                $ate = min((string) ($ate ?? $ultima), $ultima);
+            }
+        }
+        $min = $b['filtro']['min'] ?? null;
+        $max = $b['filtro']['max'] ?? null;
+        return array_values(array_filter(AcertoModel::listar($de, $ate, $b['conta']['id'] ?? null, $b['q']),
+            static fn(array $a): bool => ($min === null || abs((float) $a['valor']) >= $min) && ($max === null || abs((float) $a['valor']) <= $max)));
+    }
+
+    /** A soma dos acertos do período inteiro (para o resumo, mesmo com a lista paginada), com os mesmos filtros. */
+    private static function somaAcertos(array $b): float
+    {
+        $b2 = $b;
+        $lista = self::acertosDoExtrato($b2, [], 0);
+        return round(array_sum(array_map(static fn(array $a): float => (float) $a['valor'], $lista)), 2);
+    }
+
+    /** O período do extrato: [de, ate], datas inclusivas, null = sem limite. */
+    private static function periodoDoExtrato(array $b): array
+    {
+        return $b['periodo'] !== null ? [$b['periodo']['de'], $b['periodo']['ate']] : [$b['mes'], date('Y-m-t', strtotime($b['mes']))];
+    }
+
+    /**
+     * O saldo com que o mês começou ("Saldo que veio de outubro"), para a linha do fim do extrato e o resumo. Só no
+     * modo do mês, sem busca nem filtro além da conta, e na ordem por dia. Mês que já começou: o saldo de fato no fim
+     * da véspera (o mesmo do Início e do Mês fechado). Mês que ainda não começou: o que o plano prevê, só para o total.
+     * @return ?array{valor:float, previsto:bool, mes_anterior:string, primeiro:bool}
+     */
+    private static function abertura(array $b): ?array
+    {
+        $f = $b['filtro'];
+        if ($b['modo'] !== '' || $f['categoria_id'] !== null || $f['classe'] !== null || $b['quem'] > 0 || $b['q'] !== ''
+            || isset($f['min']) || isset($f['max']) || !in_array($b['ordem'], ['', 'dia-asc'], true)) {
+            return null;
+        }
+        $mes = $b['mes'];
+        $vespera = date('Y-m-d', strtotime($mes . ' -1 day'));
+        $primeiro = MesModel::primeiro();
+        $base = ['mes_anterior' => date('Y-m-01', strtotime($vespera)), 'primeiro' => $primeiro !== null && $mes <= (string) $primeiro];
+        if ($mes <= Relogio::hoje()) {
+            $valor = $b['conta'] !== null
+                ? ContaModel::saldo($b['conta']['id'], $vespera)
+                : LancamentoModel::saldoCalculado(AjusteModel::valor('saldo_ini'), $vespera);
+            return ['valor' => round($valor, 2), 'previsto' => false] + $base;
+        }
+        if ($b['conta'] !== null) {
+            return null;
+        }
+        $linha = MotorFinanceiro::linhaDoMes($mes);
+        return $linha !== null ? ['valor' => round((float) $linha['sobrou_mes_anterior'], 2), 'previsto' => true] + $base : null;
     }
 
     /**

@@ -57,6 +57,15 @@ for (const tema of ['claro', 'escuro']) {
             expect(await graves(page)).toEqual([]);
         });
 
+        test('Acertar saldo: o formulário e a conta antes de lançar', async ({ page }) => {
+            await page.goto('/acertos/novo');
+            expect(await graves(page)).toEqual([]);
+            await page.locator('.ac-form').getByLabel('Saldo que o banco mostra').fill('1,00');
+            await page.locator('.ac-form').getByRole('button', { name: 'Ver o acerto' }).click();
+            await expect(page.locator('.ac-previa')).toBeVisible();
+            expect(await graves(page)).toEqual([]);
+        });
+
         test('privacidade', async ({ page }) => {
             await page.goto('/privacidade');
             expect(await graves(page)).toEqual([]);

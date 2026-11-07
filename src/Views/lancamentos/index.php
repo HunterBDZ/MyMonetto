@@ -7,6 +7,8 @@
  * $form (não usado aqui: o Lançar é o diálogo do layout), $contasMes (ChecklistContas::fixasAPagar).
  * Com mais de uma conta: $contas (todas, para o filtro), $conta (a filtrada, ou null), $transferencias (as do período,
  * com ↔ e fora dos totais), $saldoConta (o saldo da conta filtrada); $nomesCartao (com mais de um cartão).
+ * $acertos (os acertos de saldo do período, com ± e fora do Entrou, do Gastou e da soma do dia), $somaAcertos (a soma
+ * deles no período inteiro), $abertura (o saldo com que o mês começou, para a linha do fim e o resumo, ou null).
  * De cima para baixo: o topo (Extrato, o período e o seletor de mês; Importar e a planilha no ⋯), a faixa do período
  * (Entrou, Gasto, as movimentações quando há, e o saldo), os filtros numa linha com a busca (/ foca, extrato.js) e a
  * tabela agrupada por dia, com a soma do dia. "Contas do mês" mora no Início e no Mês: aqui, só a linha discreta da
@@ -43,6 +45,9 @@ $mesTitulo = static fn(string $m): string => t('{mes} de {ano}', ['mes' => mb_co
 $contas = $contas ?? [];
 $conta = $conta ?? null;
 $transferencias = $transferencias ?? [];
+$acertos = $acertos ?? [];
+$somaAcertos = (float) ($somaAcertos ?? 0.0);
+$abertura = $abertura ?? null;
 $nomesCartao = $nomesCartao ?? [];
 $nomeContaDe = [];
 foreach ($contas !== [] ? $contas : \Financeiro\Models\ContaModel::todas() as $c) {
@@ -57,10 +62,30 @@ if ($agrupado) {
     foreach ($transferencias as $tr) {
         $dias[$tr['data']][] = ['transf' => true] + $tr;
     }
+    foreach ($acertos as $ac) {
+        $dias[$ac['data']][] = ['acerto' => true] + $ac;
+    }
     $ordem === '' ? krsort($dias) : ksort($dias);
 } else {
-    $dias = $linhas === [] && $transferencias === [] ? [] : ['tudo' => array_merge($linhas, array_map(static fn(array $tr): array => ['transf' => true] + $tr, $transferencias))];
+    $extras = array_merge(array_map(static fn(array $tr): array => ['transf' => true] + $tr, $transferencias), array_map(static fn(array $ac): array => ['acerto' => true] + $ac, $acertos));
+    $dias = $linhas === [] && $extras === [] ? [] : ['tudo' => array_merge($linhas, $extras)];
 }
+$temLinhas = $linhas !== [] || $transferencias !== [] || $acertos !== [];
+
+// a linha do saldo com que o mês começou: no fim da lista (a mais antiga), ou no começo em "Mais antigos"; com a
+// lista paginada, só quando ela chega ao começo do mês
+$linhaAbertura = static function () use ($abertura): void {
+    if ($abertura === null) {
+        return;
+    }
+    $rot = $abertura['primeiro'] ? t('Saldo no início') : t('Saldo que veio de {mes}', ['mes' => mesExtenso($abertura['mes_anterior'])]); ?>
+    <tbody class="ext-abertura">
+        <tr class="ext-linha" data-ex-abertura>
+            <td class="ext-c-desc" colspan="3"><span class="ext-ic ext-transf-ic" aria-hidden="true">↓</span><span><?= e($rot) ?></span><?php if ($abertura['previsto']): ?> <small class="ext-agendado"><?= e(t('previsto')) ?></small><?php endif; ?></td>
+            <td class="ext-c-valor"><?= $abertura['previsto'] ? valor($abertura['valor'], 'previsto', ['centavos' => false]) : valor($abertura['valor'], 'neutro', ['centavos' => false]) ?></td>
+        </tr>
+    </tbody>
+<?php };
 $exibidas = count($linhas);
 $faltam   = max(0, (int) $totais['n'] - $exibidas);
 
@@ -88,6 +113,7 @@ $periodoTxt = $modo === '' ? $mesTitulo($mes) : $rotuloPeriodo;
 $acoes = '<details class="menu ext-menu"><summary aria-label="' . e(t('mais ações')) . '">' . svgIcon('more', 20) . '</summary><div class="menu-painel">'
     . '<a class="menu-item" href="' . e($urlImportar) . '">' . svgIcon('arrow-up', 18) . e(t('Importar extrato')) . '</a>'
     . '<a class="menu-item" href="' . e($urlPlanilha) . '">' . svgIcon('download', 18) . e(t('Exportar planilha (CSV)')) . '</a>'
+    . '<a class="menu-item" href="/acertos/novo?volta=' . e($voltaEnc) . '">' . svgIcon('check', 18) . e(t('Acertar saldo com o banco')) . '</a>'
     . '</div></details>';
 if ($modo !== '') {
     $acoes = '<a class="btn btn-contorno btn-sm ext-voltar-mes" href="' . e($url(['periodo' => '', 'de' => '', 'ate' => ''])) . '">' . e(t('Ver só {mes}', ['mes' => mesAno($mes)])) . '</a>' . $acoes;
@@ -115,7 +141,7 @@ $valorLinha = static function (array $r) use ($hoje): string {
 $somaDia = static function (array $rows): float {
     $s = 0.0;
     foreach ($rows as $r) {
-        if (empty($r['transf']) && (int) $r['operacional'] === 1) {
+        if (empty($r['transf']) && empty($r['acerto']) && (int) $r['operacional'] === 1) {
             $s += (int) $r['sinal'] > 0 ? (float) $r['valor'] : -(float) $r['valor'];
         }
     }
@@ -128,19 +154,26 @@ $colunas = 4;
         ? ['titulo' => t('Extrato'), 'apoio' => $periodoTxt, 'mes' => $mes, 'meses' => $meses, 'href' => '/lancamentos?mes=', 'sufixo' => $sufixo, 'acoes' => $acoes]
         : ['titulo' => t('Extrato'), 'apoio' => $periodoTxt, 'acoes' => $acoes]); ?>
 
-    <?php if ($linhas !== [] || $transferencias !== []): ?>
+    <?php if ($temLinhas): ?>
         <section class="faixa-grade ext-resumo" aria-label="<?= e(t('Resumo de {periodo}', ['periodo' => $periodoTxt])) ?>">
             <?php
             $temMov = (float) $totais['mov'] > 0.004;
-            $nCol = 3 + ($temMov ? 1 : 0) + ($filtrado ? 1 : 0); ?>
+            $temAcerto = abs($somaAcertos) >= 0.005;
+            $nCol = 3 + ($temMov ? 1 : 0) + ($filtrado ? 1 : 0) + ($temAcerto ? 1 : 0) + ($abertura !== null ? 1 : 0); ?>
             <dl class="numeros" style="--colunas:<?= $nCol ?>">
                 <?php if ($filtrado): ?>
                     <div><dt><?= e(t('Achados')) ?></dt><dd class="num"><?= e(num((int) $totais['n'], 0)) ?><span class="nota"><?= e(tn((int) $totais['n'], 'lançamento', 'lançamentos')) ?></span></dd></div>
+                <?php endif; ?>
+                <?php if ($abertura !== null): ?>
+                    <div><dt><?= e($abertura['primeiro'] ? t('Saldo no início') : t('Veio de {mes}', ['mes' => mesExtenso($abertura['mes_anterior'])])) ?></dt><dd data-ex-total="abertura"><?= $abertura['previsto'] ? valor($abertura['valor'], 'previsto') : valor($abertura['valor']) ?><?php if ($abertura['previsto']): ?><span class="nota"><?= e(t('previsto')) ?></span><?php endif; ?></dd></div>
                 <?php endif; ?>
                 <div><dt><?= e(t('Entrou')) ?></dt><dd data-ex-total="entrada"><?= valor((float) $totais['entrada'], 'entrada') ?><?php if ((float) ($totais['entrada_ag'] ?? 0) > 0.004): ?><span class="nota"><?= e(t('mais {valor} agendado', ['valor' => num((float) $totais['entrada_ag'])])) ?></span><?php endif; ?></dd></div>
                 <div><dt><?= e(t('Gastou')) ?></dt><dd data-ex-total="gasto"><?= valor(-(float) $totais['gasto'], 'saida') ?><?php if ((float) ($totais['gasto_ag'] ?? 0) > 0.004): ?><span class="nota"><?= e(t('mais {valor} agendado', ['valor' => num((float) $totais['gasto_ag'])])) ?></span><?php endif; ?></dd></div>
                 <?php if ($temMov): ?>
                     <div><dt><?= e(t('Movimentações')) ?></dt><dd><span class="num ext-v-mov">⇄ <?= valor((float) $totais['mov']) ?></span><span class="nota"><?= e(t('guardado e empréstimo')) ?></span></dd></div>
+                <?php endif; ?>
+                <?php if ($temAcerto): ?>
+                    <div><dt><?= e(t('Acertos')) ?></dt><dd data-ex-total="acertos"><span class="num ext-v-mov"><?= e(($somaAcertos > 0 ? '+' : MENOS) . num(abs($somaAcertos))) ?></span><span class="nota"><?= e(t('com o banco')) ?></span></dd></div>
                 <?php endif; ?>
                 <div><dt><?= e(t('Saldo do período')) ?></dt><dd data-ex-total="soma"><?= valor((float) $totais['soma']) ?><span class="nota"><?= e(t('o que entrou menos o gasto')) ?></span></dd></div>
             </dl>
@@ -253,7 +286,7 @@ $colunas = 4;
             </div>
         <?php endif; ?>
 
-        <?php if ($linhas === [] && $transferencias === []): ?>
+        <?php if (!$temLinhas): ?>
             <div class="vazio ext-vazio">
                 <?php if ($q !== ''): ?>
                     <p class="titulo"><?= e($modo === '' ? t('Nada com “{q}” em {mes}.', ['q' => $q, 'mes' => mesExtenso($mes)]) : t('Nada com “{q}” {onde}.', ['q' => $q, 'onde' => $ondePeriodo])) ?></p>
@@ -290,6 +323,7 @@ $colunas = 4;
                         <th scope="col" class="ext-c-valor"><?= e(t('Valor')) ?></th>
                     </tr>
                 </thead>
+                <?php if ($ordem === 'dia-asc') { $linhaAbertura(); } ?>
                 <?php $i = 0; foreach ($dias as $data => $rows): ?>
                     <tbody>
                         <?php if ($agrupado): $sd = $somaDia($rows); ?>
@@ -301,6 +335,20 @@ $colunas = 4;
                             </tr>
                         <?php endif; ?>
                         <?php foreach ($rows as $r): ?>
+                            <?php if (!empty($r['acerto'])):
+                                $va = (float) $r['valor'];
+                                $quandoA = $agrupado ? '' : diaMes($r['data']); ?>
+                                <tr class="ext-linha ext-acerto" data-mov-linha="a<?= (int) $r['id'] ?>">
+                                    <td class="ext-c-desc">
+                                        <span class="ext-ic ext-transf-ic" aria-hidden="true">±</span>
+                                        <a href="/acertos/<?= (int) $r['id'] ?>?volta=<?= e($voltaEnc) ?>"><?= e(\Financeiro\Controllers\AcertoController::rotulo($r)) ?></a>
+                                        <small class="ext-sub"><?= e(t('Acerto de saldo')) ?></small>
+                                    </td>
+                                    <td class="ext-c-cat"><?= e(t('Acerto de saldo')) ?></td>
+                                    <td class="ext-c-conta"><?= e($nomeContaDe[(int) $r['conta_id']] ?? '') ?></td>
+                                    <td class="ext-c-valor"><?php if ($quandoA !== ''): ?><small class="ext-quando"><?= e($quandoA) ?></small><?php endif; ?><span class="num ext-v-mov"><?= e(($va > 0 ? '+' : MENOS) . num(abs($va))) ?></span></td>
+                                </tr>
+                            <?php continue; endif; ?>
                             <?php if (!empty($r['transf'])):
                                 $de = (int) $r['de_conta_id'];
                                 $para = (int) $r['para_conta_id'];
@@ -337,6 +385,7 @@ $colunas = 4;
                         <?php endforeach; ?>
                     </tbody>
                 <?php endforeach; ?>
+                <?php if ($ordem === '' && $faltam === 0) { $linhaAbertura(); } ?>
             </table>
 
             <?php if ($faltam > 0): ?>

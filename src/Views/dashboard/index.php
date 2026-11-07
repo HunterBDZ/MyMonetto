@@ -319,13 +319,25 @@ $vazio = !$temLancamento && ($destino === null || $destino['total'] < 0.005);
                 <summary>
                     <span class="ini-conf-t"><?= e(t('Conferir com o banco')) ?></span>
                     <span class="ini-conf-ult num<?= $conf !== null && !$conf['bate'] ? ' atencao' : '' ?>">
-                        <?php if ($conf !== null): ?>
-                            <?= e($conf['bate'] ? t('Bate, em {data}', ['data' => diaMes($conf['data'])]) : t('Diferença de {dif}, em {data}', ['dif' => moneySigned($conf['dif']), 'data' => diaMes($conf['data'])])) ?>
+                        <?php if ($conf !== null): $acertoConf = round(array_sum(array_column($conf['acertos'] ?? [], 'valor')), 2); ?>
+                            <?= e($conf['bate'] && abs($acertoConf) < 0.005 ? t('Bate, em {data}', ['data' => diaMes($conf['data'])]) : t('Diferença de {dif}, em {data}', ['dif' => moneySigned($conf['bate'] ? $acertoConf : $conf['dif']), 'data' => diaMes($conf['data'])])) ?>
                         <?php else: ?>
                             <?= e(t('Nunca conferido')) ?>
                         <?php endif; ?>
                     </span>
                 </summary>
+                <?php if (!empty($conf['acertos'])): $acs = $conf['acertos']; $um = count($acs) === 1 ? reset($acs) : null; ?>
+                    <form class="ini-conf-acerto" method="post" action="/acertos/conferencia">
+                        <?= $csrf ?>
+                        <input type="hidden" name="volta" value="/">
+                        <p class="num"><?= e($um !== null
+                            ? ($um['valor'] < 0 ? t('O banco mostra {valor} a menos que o app em {data}.', ['valor' => money(abs($um['valor'])), 'data' => diaMes($um['data'])])
+                                                : t('O banco mostra {valor} a mais que o app em {data}.', ['valor' => money(abs($um['valor'])), 'data' => diaMes($um['data'])]))
+                            : tn(count($acs), '1 conta tem diferença com o banco.', '{n} contas têm diferença com o banco: {valores}.', ['valores' => implode(', ', array_map(static fn(array $a): string => moneySigned($a['valor']), $acs))])) ?>
+                            <?= e(t('O acerto lança a diferença, e o saldo volta a bater.')) ?></p>
+                        <button type="submit" class="btn btn-contorno btn-sm"><?= e(t('Acertar o saldo')) ?></button>
+                    </form>
+                <?php endif; ?>
                 <form class="ini-conf-form" method="post" action="/conferir">
                     <?= $csrf ?>
                     <input type="hidden" name="volta" value="/">

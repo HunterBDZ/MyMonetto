@@ -3,6 +3,7 @@ namespace Financeiro\Services;
 
 use Financeiro\Config;
 use Financeiro\Database;
+use Financeiro\Models\AcertoModel;
 use Financeiro\Models\AjusteModel;
 use Financeiro\Models\ContaModel;
 use Financeiro\Models\LancamentoModel;
@@ -76,7 +77,8 @@ final class MotorFinanceiro
      *   prev:array<string,array<int,float>>, excecao:array<string,array<int,true>>, metas:array<int,float>,
      *   real:array<string,array<int,float>>, n:array<string,array<int,int>>,
      *   ult:array<string,array<int,string>>, esp:array{cred:?int,amort:?int,guard:?int,resg:?int},
-     *   fatura:array{cat:?int, vence:int, faturas:array<string, array>}, aportes:array<string, float>}
+     *   fatura:array{cat:?int, vence:int, faturas:array<string, array>}, aportes:array<string, float>,
+     *   acertos:array<string, float>} (acertos = os acertos de saldo do banco somados por mês, AcertoModel::porMes)
      */
     public static function dados(): array
     {
@@ -155,6 +157,7 @@ final class MotorFinanceiro
             'real' => $real, 'n' => $n, 'ult' => $ult, 'esp' => $esp,
             'fatura' => CartaoFatura::faturasPagas($prev, ($aj['usa_cartao'] ?? 1.0) >= 1.0),
             'aportes' => ContaModel::aportes(),
+            'acertos' => AcertoModel::porMes(),
         ];
     }
 
@@ -347,10 +350,14 @@ final class MotorFinanceiro
         $linhas = [];
 
         $aportes = $dados['aportes'] ?? [];
+        $acertos = $dados['acertos'] ?? [];
         for ($i = 0; $i < $n; $i++) {
             $k = $comp[$i];
             // o saldo inicial de uma conta criada com meses fechados entra no começo do 1º mês aberto (ContaModel)
             $saldoIni += (float) ($aportes[$k['mes']] ?? 0.0);
+            // o acerto de saldo do banco é dinheiro que entra ou sai da conta no mês dele, fora das categorias: conta no
+            // balanço do mês (balancoTotal) e no que fica na conta, mas não no Entrou, no Gastou nem nas metas
+            $acerto = round((float) ($acertos[$k['mes']] ?? 0.0), 2);
             if ($informado !== null && $k['mes'] === $informado['mes']) {
                 $loanIni = $informado['valor'];
             }
@@ -388,13 +395,13 @@ final class MotorFinanceiro
                 $livre = $fluxo - $base - $mov - $inv;
                 $adiantado = $base + ($livre <= 0 || $antesDoSaldo
                     ? 0.0
-                    : min($la - $base, max(0.0, $livre - max(0.0, $reserva - $saldoIni))));
+                    : min($la - $base, max(0.0, $livre - max(0.0, $reserva - $saldoIni - $acerto))));
             } else {
                 $base = min($k['amort'], $la);
                 $auto = 0.0;
                 if ($objetivo !== 3 && !$antesDoSaldo) {
                     // olha à frente: o menor saldo projetado (sem novos adiantamentos) acima da reserva
-                    $proj = $saldoIni + $fluxo - $base - $mov - $inv;
+                    $proj = $saldoIni + $acerto + $fluxo - $base - $mov - $inv;
                     $melhor = $proj - $reserva;
                     $ll = $la - $base;
                     for ($q = $i + 1; $q < $n; $q++) {
@@ -414,7 +421,7 @@ final class MotorFinanceiro
                 $adiantado = $base + $auto;
             }
 
-            $fica    = $saldoIni + $fluxo - $adiantado - $mov - $inv;
+            $fica    = $saldoIni + $acerto + $fluxo - $adiantado - $mov - $inv;
             $loanFim = $la - $adiantado;
             $poupFim = $poupancaIni + $mov;
             $investFim = $investIni + $inv;
@@ -438,6 +445,7 @@ final class MotorFinanceiro
                 'amortizacao_auto'    => $k['real'] ? 0.0 : max(0.0, $adiantado - min($k['amort'], $la)),
                 'poupanca_liquido'    => $mov,
                 'invest_liquido'      => $inv,
+                'acerto'              => $acerto,
                 'fica_na_conta'       => $fica,
                 'falta_pagar'         => $loanFim,
                 'poupanca_saldo'      => $poupFim,
@@ -515,8 +523,9 @@ final class MotorFinanceiro
     public static function balancoTotal(array $linha): array
     {
         $inv = (float) ($linha['invest_liquido'] ?? 0.0);
-        $entradas = $linha['entra'] + $linha['credito_emprestimo'] + max(0, -$linha['poupanca_liquido']) + max(0, -$inv);
-        $saidas   = $linha['sai'] + $linha['amortizacao_extra'] + max(0, $linha['poupanca_liquido']) + max(0, $inv) + (float) ($linha['parcela_parte'] ?? 0.0);
+        $acerto = (float) ($linha['acerto'] ?? 0.0);
+        $entradas = $linha['entra'] + $linha['credito_emprestimo'] + max(0, -$linha['poupanca_liquido']) + max(0, -$inv) + max(0.0, $acerto);
+        $saidas   = $linha['sai'] + $linha['amortizacao_extra'] + max(0, $linha['poupanca_liquido']) + max(0, $inv) + (float) ($linha['parcela_parte'] ?? 0.0) + max(0.0, -$acerto);
         return [$entradas, $saidas, $entradas - $saidas];
     }
 

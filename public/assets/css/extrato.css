@@ -120,3 +120,25 @@
 @media (prefers-reduced-motion: reduce) {
     .ext-linha, .ext-mais > summary::after { transition: none; }
 }
+
+/* acertos de saldo e o saldo com que o mês começou (a última linha, a mais antiga) */
+.ext-abertura .ext-c-desc { color: var(--tinta-2); }
+.ext-abertura .ext-c-desc > span + span { margin-left: var(--e-2); }
+.ext-abertura tr { border-top: 1px solid var(--fio-forte); }
+
+/* Acertar saldo (acertos/novo e acertos/ver) */
+.ac-rotulo { color: var(--tinta-2); font-size: var(--t-rotulo); font-weight: 600; }
+.ac .quando { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-2); border: 0; padding: 0; margin: 0; }
+.ac .quando legend { margin-bottom: var(--e-2); }
+.ac-previa-t { font: 400 var(--t-titulo)/var(--lh-titulo) var(--f-num); letter-spacing: -.01em; }
+.ac-linhas { display: grid; gap: var(--e-3); }
+.ac-linha { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr; gap: var(--e-3); padding-bottom: var(--e-3); border-bottom: 1px solid var(--fio); }
+.ac-linha:last-child { border-bottom: 0; padding-bottom: 0; }
+.ac-linha dt { color: var(--tinta-2); font-size: var(--t-rotulo); }
+.ac-linha dd { display: flex; flex-direction: column; gap: var(--e-1); }
+.ac-linha dd small { color: var(--tinta-3); font-size: var(--t-meta); }
+.ac-confirmar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-4); }
+.mes-acerto-ic { display: inline-block; }
+.ac-campo { display: flex; flex-direction: column; gap: var(--e-2); }
+.ac-campo > span { color: var(--tinta-2); font-size: var(--t-rotulo); font-weight: 600; }
+.ac-campo .conf-app { color: var(--tinta-3); font-size: var(--t-meta); }
