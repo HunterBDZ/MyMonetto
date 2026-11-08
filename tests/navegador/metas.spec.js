@@ -48,12 +48,13 @@ test('"Para usar neste mês" desconta as contas fixas que faltam pagar', async (
     await expect(page.locator('details.mt-linha').filter({ has: page.locator('.mt-nome', { hasText: /^Luz$/ }) }).locator('.mt-c-falta')).toHaveText('falta 238,40');
 });
 
-// o gasto das Metas conta as compras no cartão pela data da compra: onde isso muda o número, a linha diz (B-04)
-test('o número que conta o cartão diz "com o cartão"', async ({ page }) => {
+// o gasto das Metas é o que saiu da conta, como no Mês: a compra no cartão entra pela fatura, e não na categoria (2.1.3)
+test('as Metas não contam as compras no cartão', async ({ page }) => {
     await page.goto('/meta');
-    await expect(page.locator('.mt-conta-dl')).toContainText('Gastou, com as compras no cartão');
-    const lazer = page.locator('details.mt-linha').filter({ has: page.locator('.mt-nome', { hasText: /^Lazer$/ }) });
-    await expect(lazer.locator('.mt-c-falta')).toContainText('com o cartão');
+    await expect(page.locator('.mt-conta-dl')).toContainText('Gastou');
+    await expect(page.locator('.mt-conta-dl')).not.toContainText('com as compras no cartão');
+    await expect(page.locator('.mt-cartao')).toHaveCount(0);
+    await expect(page.getByText('O cartão conta pela data da compra.')).toHaveCount(0);
 });
 
 // "Adicionar conta fixa" com o nome de uma conta que já existe não a sobrescreve (B-05), e conta nova pede o valor (B-15)

@@ -4,6 +4,10 @@ Cada versão publicada é uma tag `vX.Y.Z` deste repositório. Pacotes atualizam
 
 > **Nota:** a partir do redesenho, o app se chama **MyMonetto**. Os comandos, as pastas de dados e o serviço continuam com o nome antigo (`financeiro`).
 
+## 2.1.3
+
+- **Metas sem o cartão:** as Metas contam só o que saiu da conta, como o Mês. A compra no cartão não entra mais na categoria dela: ela conta pela fatura paga. O mesmo vale para o aviso de meta no "Precisa de atenção" e para o "ainda dá para gastar" depois de lançar. O "Para onde foi" continua mostrando cada compra na categoria dela, com a troca "Ver por fatura".
+
 ## 2.1.2
 
 - **Extrato:** o resumo do mês termina com o **Saldo** da conta (o que veio do mês anterior, mais o que entrou, menos o que saiu), o mesmo número do banco quando tudo está lançado. No mês de hoje é o saldo de hoje; num mês que terminou, o do último dia; num mês que ainda não chegou, o previsto. O "Saldo do período", que era só o que entrou menos o gasto, fica apenas com busca ou filtro.

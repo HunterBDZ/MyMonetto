@@ -462,7 +462,7 @@ final class LancamentosController
         MotorFinanceiro::limparCache();                          // o aviso conta com o que acabou de entrar
 
         $destino = $volta !== '' ? $volta : '/lancamentos?mes=' . substr($d['data'], 0, 8) . '01';
-        flash('success', self::avisoLancado($d['cat'], $d['valor'], $d['data'], $destino), [
+        flash('success', self::avisoLancado($d['cat'], $d['valor'], $d['data']), [
             'url'    => '/lancamentos/' . $id . '/excluir',
             'label'  => t('desfazer'),
             'campos' => ['volta' => $destino],
@@ -805,12 +805,11 @@ final class LancamentosController
 
     /**
      * Aviso depois de lançar: `Delivery −56,80 · Ainda dá para gastar 343,20 da meta.`; categoria sem previsão no mês:
-     * só `Salário +3.000,00`. O número é o da tela para onde a pessoa volta: nas Metas, o gasto como elas contam (com o
-     * cartão, pela data da compra, e a frase diz "com o cartão" quando isso muda o número); nas outras (Início, Mês,
-     * Extrato), o lançado na conta, como o Mês. Os dois são o realizado: o lançamento com data depois de hoje é
+     * só `Salário +3.000,00`. O número é o lançado na conta, o mesmo do Mês e das Metas, em qualquer tela para onde a
+     * pessoa volta (a compra no cartão conta pela fatura). É o realizado: o lançamento com data depois de hoje é
      * agendado, fica fora do gasto até o dia dele (MotorFinanceiro::realizado), e o aviso diz isso.
      */
-    private static function avisoLancado(array $cat, float $valor, string $data, string $destino = ''): string
+    private static function avisoLancado(array $cat, float $valor, string $data): string
     {
         $txt = self::valorTexto($cat, $valor, true);
         if ($data > Relogio::hoje()) {
@@ -820,22 +819,12 @@ final class LancamentosController
         if ((int) $cat['operacional'] === 1 && (int) $cat['sinal'] < 0) {
             $previsto = PrevisaoModel::valor((int) $cat['id'], $mes);
             if ($previsto > 0) {
+                // o que saiu da conta, o mesmo número do Mês e das Metas (a compra no cartão conta pela fatura)
                 $gasto = round((float) (MotorFinanceiro::realizado()['real'][$mes][(int) $cat['id']] ?? 0.0), 2);
-                $cartao = false;
-                if (preg_match('#^/meta(?:[?\#]|$)#', $destino)) {
-                    $m = MetaController::gastosDoMes($mes)[(int) $cat['id']] ?? null;
-                    $gasto = $m['gasto'] ?? $gasto;
-                    $cartao = $m['cartao'] ?? false;
-                }
                 $resta = round($previsto - $gasto, 2);
                 $nome = nomeCurto(['apelido' => $cat['apelido'] ?? null, 'nome' => $cat['nome'] ?? $cat['categoria_nome'] ?? '']);
                 $vars = ['valor' => num(abs($resta)), 'nome' => $nome, 'texto' => $txt];
                 if (MetaModel::valor((int) $cat['id']) !== null) {   // a previsão vem da meta; sem meta, é só uma estimativa
-                    if ($cartao) {
-                        return $resta < -0.004
-                            ? t('{texto} · Passou {valor} da meta de {nome}, com o cartão.', $vars)
-                            : t('{texto} · Ainda dá para gastar {valor} da meta, com o cartão.', $vars);
-                    }
                     return $resta < -0.004
                         ? t('{texto} · Passou {valor} da meta de {nome}.', $vars)
                         : t('{texto} · Ainda dá para gastar {valor} da meta.', $vars);

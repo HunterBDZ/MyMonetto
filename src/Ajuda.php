@@ -33,7 +33,7 @@ final class Ajuda
                 ['id' => 'fechar', 'pergunta' => t('O que é fechar o mês?'), 'resposta' => t('É conferir o mês e guardar o resultado: o previsto dá lugar ao que foi lançado. O botão aparece em Mês. Dá para reabrir depois, e isso não desfaz um ajuste aplicado no mês seguinte.')],
             ]],
             ['titulo' => t('Cartão'), 'itens' => [
-                ['id' => 'cartao', 'pergunta' => t('Registro a compra ou a fatura?'), 'resposta' => t('Cadastre o cartão na aba Cartão e registre as compras em Lançar. Elas formam as próximas faturas. No plano, conta a fatura, no mês em que vence. Nas Metas e em Para onde foi, cada compra conta na categoria dela, pela data da compra. Nada conta duas vezes.')],
+                ['id' => 'cartao', 'pergunta' => t('Registro a compra ou a fatura?'), 'resposta' => t('Cadastre o cartão na aba Cartão e registre as compras em Lançar. Elas formam as próximas faturas. No plano e nas Metas, conta a fatura, no mês em que vence. Em Para onde foi, cada compra conta na categoria dela, pela data da compra. Nada conta duas vezes.')],
             ]],
             ['titulo' => t('Empréstimo'), 'itens' => [
                 ['id' => 'simular', 'pergunta' => t('Como simulo um adiantamento?'), 'resposta' => t('Na aba Empréstimo, digite o valor e o mês. O app mostra quanto falta, quando termina e os juros a menos. Nada é gravado.')],

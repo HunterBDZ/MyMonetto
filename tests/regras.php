@@ -947,18 +947,21 @@ $emTransacao('gasto por categoria', static function () use ($pdo, $check, $catFa
     $check('gasto por categoria: no mês, a diferença para o extrato é só o cartão (compras − pagamentos detalhados)',
         abs(array_sum($g) - $somaCaixa - (70.0 + 190.0 + 100.0 + 40.0 + 150.0 - 340.0)) < 0.01, json_encode([array_sum($g), $somaCaixa]));
 
-    // Metas: a meta estoura só por causa do cartão; "Resta para usar" usa a mesma conta
+    // Metas: só o que saiu da conta, como o Mês (2.1.3, a pedido do dono): a compra no cartão não entra na categoria dela,
+    // só a fatura paga, na categoria da fatura. "Resta para usar" usa a mesma conta
     $hMeta = $render(MetaController::class, 'index', []);
+    $gm = MetaController::gastosDoMes($mesHoje);
+    $contaM = GastosMensais::matriz()[$mesHoje]['cats'] ?? [];
     $gastoTotal = 0.0;
     foreach (CategoriaModel::gastos() as $c) {
-        $gastoTotal += max(0.0, $g[(int) $c['id']] ?? 0.0);
+        $gastoTotal += $gm[(int) $c['id']]['gasto'] ?? 0.0;
     }
-    $gastoTotal += $g[GastoPorCategoria::SEM_CATEGORIA];
-    $check('metas: a meta estoura só por causa do cartão', str_contains($hMeta, 'mt-linha is-over" id="c' . $catL . '"')
-        && str_contains($hMeta, 'data-gasto="190.00"') && str_contains($hMeta, 'mt-linha is-ok" id="c' . $catD . '"'));
-    $check('metas: "Resta para usar" conta o cartão pela data da compra, com o sem categoria', str_contains($hMeta, 'data-gasto-total="' . number_format($gastoTotal, 2, '.', '') . '"'), number_format($gastoTotal, 2, '.', ''));
-    $check('metas: diz que o cartão conta pela data da compra e leva a categorizar', str_contains($hMeta, 'O cartão conta pela data da compra.')
-        && str_contains($hMeta, 'href="/cartao/compras/' . $semCat . '/editar"'));
+    $check('metas: a compra no cartão não entra na categoria (o gasto é o da conta, como no Mês)',
+        abs(($gm[$catL]['gasto'] ?? 0.0) - round((float) ($contaM[$catL]['real'] ?? 0.0), 2)) < 0.005 && abs(($g[$catL] ?? 0.0) - ($gm[$catL]['gasto'] ?? 0.0)) >= 0.005
+        && !str_contains($hMeta, 'data-gasto="190.00"'), json_encode([$gm[$catL] ?? null, $g[$catL] ?? null]));
+    $check('metas: "Resta para usar" usa o gasto da conta', str_contains($hMeta, 'data-gasto-total="' . number_format($gastoTotal, 2, '.', '') . '"'), number_format($gastoTotal, 2, '.', ''));
+    $check('metas: sem frase nem número do cartão', !str_contains($hMeta, 'O cartão conta pela data da compra.') && !str_contains($hMeta, 'com o cartão')
+        && !str_contains($hMeta, 'href="/cartao/compras/' . $semCat . '/editar"'));
 
     // "Para onde foi": soma 100%, bate com a visão e é o mesmo no Início e no Relatório
     $positivo = round(array_sum(array_filter($g, static fn(float $v): bool => $v > 0.004)), 2);
@@ -1543,29 +1546,36 @@ $emTransacao('atenção e metas', static function () use ($check, $render, $mesH
         return [$metas, $aten];
     };
     [$metas, $aten] = $passaram();
-    $check('atenção: as categorias acima da meta são as mesmas das Metas, com o cartão contado igual', $metas !== [] && $metas === $aten, json_encode([$metas, $aten]));
+    $check('atenção: as categorias acima da meta são as mesmas das Metas', $metas !== [] && $metas === $aten, json_encode([$metas, $aten]));
     // a meta do mês (um valor só deste mês, como o editor de recorrência grava) vale nos dois
     PrevisaoModel::setValor($metas[0], $mesHoje, 99999.0);
     [$metas2, $aten2] = $passaram();
     $check('atenção: a meta do mês vale, e o aviso some junto com o vermelho das Metas', !in_array($metas[0], $aten2, true) && $metas2 === $aten2, json_encode([$metas2, $aten2]));
 
-    // os números que contam o cartão dizem isso; o aviso do Lançar usa o número da tela para onde a pessoa volta
+    // as Metas, o "Precisa de atenção" e o aviso do Lançar contam o que saiu da conta: a compra no cartão, que o "Para
+    // onde foi" põe na categoria dela, não entra (2.1.3, a pedido do dono)
+    $doMes = GastoPorCategoria::doMes($mesHoje);
     $g = MetaController::gastosDoMes($mesHoje);
-    $comCartao = array_keys(array_filter($g, static fn(array $x): bool => $x['cartao']));
+    $comCartao = [];
+    foreach (CategoriaModel::gastos() as $c) {
+        $id = (int) $c['id'];
+        if ($c['grupo'] !== 'Cartao' && abs((float) ($doMes[$id] ?? 0.0) - (float) ($g[$id]['gasto'] ?? 0.0)) >= 0.005) {
+            $comCartao[] = $id;
+        }
+    }
     $htmlM = $render(MetaController::class, 'index', []);
     if (GastoPorCategoria::ativo() && $comCartao !== []) {
-        $cat = CategoriaModel::find($comCartao[0]);
-        PrevisaoModel::setValor($comCartao[0], $mesHoje, 99999.0);
+        $id = $comCartao[0];
+        $cat = CategoriaModel::find($id);
+        $conta = round((float) (MotorFinanceiro::realizado()['real'][$mesHoje][$id] ?? 0.0), 2);
+        PrevisaoModel::setValor($id, $mesHoje, 99999.0);
         MotorFinanceiro::limparCache();
-        $aviso = new \ReflectionMethod(LancamentosController::class, 'avisoLancado');
-        $naMeta = (string) $aviso->invoke(null, $cat, 10.0, $hoje, '/meta?mes=' . $mesHoje);
-        $noInicio = (string) $aviso->invoke(null, $cat, 10.0, $hoje, '/');
-        $check('metas: com o cartão, o gasto e o que falta dizem "com o cartão"', str_contains($htmlM, 'Gastou, com as compras no cartão') && str_contains($htmlM, 'Gasto<small class="mt-cartao">com o cartão</small>')
-            && preg_match('/id="c' . $comCartao[0] . '".*?<small class="mt-cartao">com o cartão<\/small><\/span>/s', $htmlM) === 1);
-        $check('lançar: o aviso usa o número da tela para onde volta', str_contains($naMeta, num(round(99999.0 - $g[$comCartao[0]]['gasto'], 2)) . ' da meta, com o cartão')
-            && str_contains($noInicio, num(round(99999.0 - LancamentoModel::somaPorCategoria($comCartao[0], $mesHoje), 2)) . ' da meta.'), $naMeta . ' | ' . $noInicio);
+        $aviso = (string) (new \ReflectionMethod(LancamentosController::class, 'avisoLancado'))->invoke(null, $cat, 10.0, $hoje);
+        $check('metas: a categoria com compras no cartão conta só o que saiu da conta, sem "com o cartão"', abs((float) ($g[$id]['gasto'] ?? 0.0) - $conta) < 0.005
+            && !str_contains($htmlM, 'com o cartão') && !str_contains($htmlM, 'Gastou, com as compras no cartão'), json_encode([$g[$id] ?? null, $conta, $doMes[$id] ?? null]));
+        $check('lançar: o aviso da meta usa o que saiu da conta', str_contains($aviso, num(round(99999.0 - $conta, 2))) && !str_contains($aviso, 'com o cartão'), $aviso);
     } else {
-        $check('metas: a demonstração tem compra no cartão contada nas Metas', false);
+        $check('metas: a demonstração tem compra no cartão numa categoria de gasto', false);
     }
 });
 
@@ -1653,14 +1663,19 @@ $emTransacao('agendado em toda conta', static function () use ($pdo, $check, $re
         MotorFinanceiro::limparCache();
     }
     $antes = $foto();
-    // o mesmo nome, o mesmo número: o "Gastou" do Início e do Relatório; o "Para onde foi" do Início, do Relatório e das Metas
+    // o mesmo nome, o mesmo número: o "Gastou" do Início e do Relatório; o "Para onde foi" do Início e do Relatório. As
+    // Metas contam o que saiu da conta, como o Mês, sem as compras no cartão (2.1.3)
     $mesmoOnde = true;
     foreach ($antes['relCats'] as $id => $v) {
-        $mesmoOnde = $mesmoOnde && abs($v - (float) ($antes['inicioOnde'][$id] ?? 0.0)) < 0.005
-            && ($id === GastoPorCategoria::SEM_CATEGORIA || $id === GastoPorCategoria::categoriaFatura() || abs($v - (float) ($antes['metas'][$id] ?? 0.0)) < 0.005);
+        $mesmoOnde = $mesmoOnde && abs($v - (float) ($antes['inicioOnde'][$id] ?? 0.0)) < 0.005;
     }
-    $check('agendado: "Gastou" é o mesmo no Início e no Relatório, e o "Para onde foi" é o mesmo no Início, no Relatório e nas Metas',
-        abs($antes['inicioGastou'] - $antes['relGastou']) < 0.005 && $mesmoOnde, json_encode([$antes['inicioGastou'], $antes['relGastou'], $antes['relCats'], $antes['inicioOnde']]));
+    $realMes = MotorFinanceiro::realizado($hoje)['real'][$mesHoje] ?? [];
+    $metasConta = $antes['metas'] !== [];
+    foreach ($antes['metas'] as $id => $v) {
+        $metasConta = $metasConta && abs($v - round((float) ($realMes[$id] ?? 0.0), 2)) < 0.005;
+    }
+    $check('agendado: "Gastou" e "Para onde foi" são os mesmos no Início e no Relatório, e as Metas contam o que saiu da conta, como o Mês',
+        abs($antes['inicioGastou'] - $antes['relGastou']) < 0.005 && $mesmoOnde && $metasConta, json_encode([$antes['inicioGastou'], $antes['relGastou'], $antes['relCats'], $antes['inicioOnde'], $antes['metas']]));
     $check('agendado: a escada do Relatório fecha no fim do mês do plano', abs(array_sum(array_map(static fn(array $p): float => $p['tipo'] === 'fim' ? 0.0 : (float) $p['valor'], $antes['relPonte']))
         - $antes['fica']) < 0.01 && abs(end($antes['relPonte'])['valor'] - $antes['fica']) < 0.01);
     if ($hoje >= date('Y-m-t', strtotime($hoje))) {

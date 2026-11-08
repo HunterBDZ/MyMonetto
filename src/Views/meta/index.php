@@ -8,8 +8,8 @@
  * contas, POST /meta/contas/{id}, com o dia do vencimento).
  * Variáveis: $mes, $meses, $hoje, $opcoes (mês => rótulo), $essenciais, $naoEssenciais, $contas (linhas do
  * MetaController::linha), $addEss, $addNao, $elegiveis, $erro, $renda, $totalMeta, $gastoTotal, $gastoComMeta,
- * $gastoSemMeta, $metaEss, $metaNaoEss, $gastoEss, $gastoNaoEss, $totalContas, $porCompra (o cartão conta pela data
- * da compra) e $semCategoria (?array{valor, compras}: as compras no cartão sem categoria do mês, com o atalho para categorizar).
+ * $gastoSemMeta, $metaEss, $metaNaoEss, $gastoEss, $gastoNaoEss e $totalContas. O gasto é o que saiu da conta, como
+ * no Mês: a compra no cartão conta pela fatura paga, e não na categoria dela.
  */
 use Financeiro\Services\ChecklistContas;
 
@@ -108,9 +108,8 @@ $proprio = static fn(array $l): string => $l['proprio']
     : '';
 
 /* -------- as colunas de uma linha: meta, gasto, a barra fina e o que falta -------- */
-// cartao: o gasto conta compras no cartão e difere do Mês e do Início, então embaixo de "falta" ou "passou" vem
-// "com o cartão". No celular, a meta aparece ao lado da barra ("meta 1.600,00")
-$colunas = static function (float $valor, float $gasto, bool $semMeta, string $falta = '', bool $cartao = false, ?string $semTxt = null): void {
+// no celular, a meta aparece ao lado da barra ("meta 1.600,00")
+$colunas = static function (float $valor, float $gasto, bool $semMeta, string $falta = '', ?string $semTxt = null): void {
     $p = $valor > 0.004 ? min(1.0, $gasto / $valor) : 0.0;
     $passou = $valor > 0.004 && $gasto - $valor > 0.004; ?>
     <span class="mt-c mt-c-meta num"><span class="sr-only mt-rot"><?= e(t('meta')) ?> </span><?= $semMeta ? '<span class="mt-sem">' . e($semTxt ?? t('sem meta')) . '</span>' : e(num($valor)) ?></span>
@@ -125,9 +124,6 @@ $colunas = static function (float $valor, float $gasto, bool $semMeta, string $f
             echo e(t('passou {valor}', ['valor' => num($gasto - $valor)]));
         } else {
             echo e(t('falta {valor}', ['valor' => num(max(0.0, $valor - $gasto))]));
-        }
-        if ($cartao && !$semMeta && $falta === '') {
-            echo '<small class="mt-cartao">' . e(t('com o cartão')) . '</small>';
         } ?></span>
 <?php };
 
@@ -140,19 +136,18 @@ $linha = static function (array $l) use ($editor, $proprio, $colunas): void {
     <details class="mt-linha <?= $cls ?>" id="c<?= (int) $l['id'] ?>" data-valor="<?= e(number_format($valor, 2, '.', '')) ?>" data-gasto="<?= e(number_format($gasto, 2, '.', '')) ?>" data-nome="<?= e($l['nome']) ?>"<?= !empty($l['aberta']) ? ' open' : '' ?>>
         <summary>
             <span class="mt-c mt-c-nome"><?= iconeCategoria((int) $l['id'], (string) $l['nome'], $l['grupo'], 20, 'mt-ic') ?><span class="mt-nome-txt"><span class="mt-nome"><?= e($l['nome']) ?></span><?= $proprio($l) ?></span></span>
-            <?php $colunas($valor, $gasto, $valor <= 0.004, '', !empty($l['cartao'])); ?>
+            <?php $colunas($valor, $gasto, $valor <= 0.004); ?>
         </summary>
         <?php $editor($l, '/meta/editar', false); ?>
     </details>
 <?php };
 
 /* -------- o cabeçalho das colunas e o total do grupo -------- */
-// com o cartão, o gasto das Metas é outro número que o do Mês e do Início: o rótulo diz isso
-$cabecalho = static function (string $primeira, float $meta, float $gasto) use ($porCompra): void { ?>
+$cabecalho = static function (string $primeira, float $meta, float $gasto): void { ?>
     <div class="mt-cab" aria-hidden="true">
         <span class="mt-c mt-c-nome"><?= e($primeira) ?></span>
         <span class="mt-c mt-c-meta"><?= e(t('Meta')) ?></span>
-        <span class="mt-c mt-c-gasto"><?= e(t('Gasto')) ?><?php if ($porCompra): ?><small class="mt-cartao"><?= e(t('com o cartão')) ?></small><?php endif; ?></span>
+        <span class="mt-c mt-c-gasto"><?= e(t('Gasto')) ?></span>
         <span class="mt-c mt-c-barra"></span>
         <span class="mt-c mt-c-falta"></span>
     </div>
@@ -243,20 +238,16 @@ $gastoContas = round(array_sum(array_column($contas, 'gasto')), 2);
             </div>
             <dl class="mt-conta-dl num" aria-label="<?= e(t('A conta do valor para usar')) ?>">
                 <div><dt><?= e(t('Entrou e já estava na conta')) ?></dt><dd><?= valor($renda, 'neutro', ['centavos' => false]) ?></dd></div>
-                <div><dt><?= e($porCompra ? t('Gastou, com as compras no cartão') : t('Gastou')) ?></dt><dd><?= valor(-$gastoTotal, 'saida', ['centavos' => false]) ?></dd></div>
+                <div><dt><?= e(t('Gastou')) ?></dt><dd><?= valor(-$gastoTotal, 'saida', ['centavos' => false]) ?></dd></div>
                 <?php if (!$fechado): ?>
                     <div><dt><?= e(t('Contas fixas a pagar')) ?></dt><dd><?= valor(-$porPagar, 'previsto', ['centavos' => false]) ?></dd></div>
                 <?php endif; ?>
                 <div class="mt-conta-fim"><dt><?= $noVermelho ? e(t('No vermelho')) : e(t('Para usar')) ?></dt><dd><?= valor($paraUsar, 'neutro', ['centavos' => false]) ?></dd></div>
             </dl>
         <?php endif; ?>
-        <?php if ($porCompra || $semCategoria !== null || $gastoSemMeta > 0.004): ?>
+        <?php if ($gastoSemMeta > 0.004): ?>
             <div class="mt-notas">
-                <?php if ($gastoSemMeta > 0.004): ?><p class="num"><?= e(t('Do gasto, {valor} foi em categorias sem meta.', ['valor' => num($gastoSemMeta)])) ?></p><?php endif; ?>
-                <?php if ($porCompra): ?><p><?= e(t('O cartão conta pela data da compra.')) ?></p><?php endif; ?>
-                <?php if ($semCategoria !== null): ?>
-                    <p class="num"><?= t('Compras no cartão sem categoria: {valor}. {link}', ['valor' => e(num($semCategoria['valor'])), 'link' => '<a class="link" href="/cartao/compras/' . (int) $semCategoria['compras'][0] . '/editar">' . e(t('Categorizar')) . '</a>']) ?></p>
-                <?php endif; ?>
+                <p class="num"><?= e(t('Do gasto, {valor} foi em categorias sem meta.', ['valor' => num($gastoSemMeta)])) ?></p>
             </div>
         <?php endif; ?>
     </section>

@@ -9,7 +9,6 @@ use Financeiro\Models\ContaRecorrenteModel;
 use Financeiro\Models\MesModel;
 use Financeiro\Relogio;
 use Financeiro\Services\CartaoFatura;
-use Financeiro\Services\GastoPorCategoria;
 use Financeiro\Services\GastosMensais;
 use Financeiro\Services\MetaRecorrencia;
 use Financeiro\Services\MotorFinanceiro;
@@ -23,8 +22,8 @@ use Financeiro\View;
  * em PREVISAO (view previsao_efetiva), ou o valor próprio do mês. Cada linha abre um editor com o valor, o mês
  * em que começa e até quando vale (MetaRecorrencia), também em mês fechado. A gravação é um lote do
  * PrevisaoLote, com desfazer; o aviso mostra o efeito no fim do último mês.
- * O gasto de cada categoria é o de GastoPorCategoria: com o cartão, cada compra conta na categoria dela, pela
- * data da compra, parcela a parcela; o plano continua contando a fatura.
+ * O gasto de cada categoria é o que saiu da conta (os lançamentos), como no Mês: a compra no cartão não entra na
+ * categoria dela, só a fatura paga, na conta da fatura. O dono não quer o cartão nos indicadores das Metas (2.1.3).
  */
 final class MetaController
 {
@@ -45,10 +44,6 @@ final class MetaController
         // o mês escolhido: a renda (o que entrou mais o que veio do mês anterior) e o gasto de cada categoria
         $linhaMes   = GastosMensais::matriz()[$mes] ?? ['renda' => 0.0, 'cats' => []];
         $entradas   = (float) ($linhaMes['renda'] ?? 0.0);
-        // com o cartão: cada compra na categoria dela, pela data da compra (sem o cartão, é o mesmo que os lançamentos)
-        $porCompra = GastoPorCategoria::ativo();
-        $doMes     = $porCompra ? GastoPorCategoria::doMes($mes) : [];
-        $semCat    = $porCompra ? GastoPorCategoria::semCategoria($mes) : null;
         $gastosMes = self::gastosDoMes($mes);
         $gastoDe   = static fn(int $id): float => $gastosMes[$id]['gasto'] ?? 0.0;
         $linhaPlano = MotorFinanceiro::linhaDoMes($mes);
@@ -69,7 +64,7 @@ final class MetaController
                 continue;
             }
             $ehConta[$id] = true;
-            $contas[] = self::linha($d, $c, $mes, $gastoDe($id), $gastosMes[$id]['cartao'] ?? false) + [
+            $contas[] = self::linha($d, $c, $mes, $gastoDe($id)) + [
                 'conta' => (int) $r['id'], 'dia' => (int) $r['dia_vencimento'], 'do_cartao' => $id === $catFatura,
                 'nome' => $c['grupo'] === 'Cartao' ? nomeCategoria($c['nome']) : nomeCurto($c),
             ];
@@ -85,7 +80,7 @@ final class MetaController
             if (isset($ehConta[$id])) {
                 continue;
             }
-            $l = self::linha($d, $d['cats'][$id] ?? $c, $mes, $gastoDe($id), $gastosMes[$id]['cartao'] ?? false) + ['nome' => nomeCurto($c)];
+            $l = self::linha($d, $d['cats'][$id] ?? $c, $mes, $gastoDe($id)) + ['nome' => nomeCurto($c)];
             $l['aberta'] = $id === $add || (int) ($erro['cat'] ?? 0) === $id;
             $ehEss = (int) $c['essencial'] === 1;
             if ($l['padrao'] !== null || $l['valor'] > 0.004 || $l['aberta']) {
@@ -125,10 +120,6 @@ final class MetaController
             }
         }
 
-        if ($porCompra) {
-            $gastoTotal += max(0.0, (float) ($doMes[GastoPorCategoria::SEM_CATEGORIA] ?? 0.0));   // "Cartão sem categoria": gasto sem meta
-        }
-
         View::render('meta/index', [
             'pageTitle'     => t('meta · MyMonetto'),
             'mes'           => $mes,
@@ -152,45 +143,37 @@ final class MetaController
             'gastoEss'      => $soma($ess, 'gasto'),
             'gastoNaoEss'   => $soma($naoEss, 'gasto'),
             'totalContas'   => $soma($contas, 'valor'),
-            'porCompra'     => $porCompra,
-            'semCategoria'  => $semCat,
         ], 'meta');
     }
 
     /**
-     * O gasto de cada categoria de gasto no mês, como as Metas contam: com o cartão (GastoPorCategoria::ativo), cada
-     * compra na categoria dela, pela data da compra; sem ele, os lançamentos. `cartao` marca as categorias em que as
-     * compras no cartão mudam o número: o Mês e o Início contam a fatura e dão outro, então a tela diz "com o cartão".
-     * O "Precisa de atenção" e o aviso do Lançar usam esta mesma conta. É o gasto realizado: o agendado (data depois de
-     * hoje) fica de fora até o dia dele (MotorFinanceiro::realizado).
-     * @return array<int, array{gasto:float, cartao:bool}>
+     * O gasto de cada categoria de gasto no mês, como as Metas contam: o que saiu da conta (os lançamentos), o mesmo
+     * número do Mês. A compra no cartão não entra na categoria dela; a fatura paga conta na categoria da fatura. O
+     * "Precisa de atenção" usa esta mesma conta. É o gasto realizado: o agendado (data depois de hoje) fica de fora
+     * até o dia dele (MotorFinanceiro::realizado).
+     * @return array<int, array{gasto:float}>
      */
     public static function gastosDoMes(string $mes, ?string $hoje = null): array
     {
-        $cats = GastosMensais::matriz($hoje)[$mes]['cats'] ?? [];
-        $doMes = GastoPorCategoria::ativo() ? GastoPorCategoria::doMes($mes, $hoje) : null;
         $out = [];
-        foreach (array_keys($cats + ($doMes ?? [])) as $id) {
-            $conta = round((float) ($cats[$id]['real'] ?? 0.0), 2);
-            $gasto = $doMes !== null ? round(max(0.0, (float) ($doMes[$id] ?? 0.0)), 2) : $conta;
-            $out[(int) $id] = ['gasto' => $gasto, 'cartao' => abs($gasto - $conta) >= 0.005];
+        foreach (GastosMensais::matriz($hoje)[$mes]['cats'] ?? [] as $id => $c) {
+            $out[(int) $id] = ['gasto' => round((float) ($c['real'] ?? 0.0), 2)];
         }
         return $out;
     }
 
     /**
      * Uma categoria no mês: o valor que vale nele, a meta de todo mês e se o mês tem valor próprio diferente dela.
-     * cartao = o gasto conta compras no cartão e difere do Mês (a linha diz "com o cartão").
-     * @return array{id:int, grupo:string, essencial:int, valor:float, padrao:?float, proprio:bool, gasto:float, cartao:bool}
+     * @return array{id:int, grupo:string, essencial:int, valor:float, padrao:?float, proprio:bool, gasto:float}
      */
-    private static function linha(array $d, array $c, string $mes, float $gasto, bool $cartao = false): array
+    private static function linha(array $d, array $c, string $mes, float $gasto): array
     {
         $id = (int) $c['id'];
         $valor = round((float) ($d['prev'][$mes][$id] ?? 0.0), 2);
         $padrao = PrevisaoEdicao::meta($d, $id);
         return [
             'id' => $id, 'grupo' => (string) $c['grupo'], 'essencial' => (int) $c['essencial'],
-            'valor' => $valor, 'padrao' => $padrao, 'gasto' => round($gasto, 2), 'cartao' => $cartao,
+            'valor' => $valor, 'padrao' => $padrao, 'gasto' => round($gasto, 2),
             'proprio' => !empty($d['excecao'][$mes][$id]) && $padrao !== null && abs($valor - $padrao) >= 0.005,
         ];
     }
