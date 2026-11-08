@@ -13,20 +13,25 @@ use Financeiro\View;
 
 /**
  * Acerto de saldo: quando o app e o banco não batem por uma diferença que não vale procurar, o acerto lança a
- * diferença de uma vez, e o saldo volta a bater. Dois caminhos: o botão "Acertar o saldo" da última conferência (no
- * Início e no aviso depois de conferir ou fechar o mês) e o "Acertar saldo" do Extrato, que pede o saldo do banco
- * numa data, mostra a conta e só lança depois de confirmar. Mês fechado não muda: o acerto de um dia de mês fechado
+ * diferença de uma vez, e o saldo volta a bater. O caminho é o "Acertar saldo com o banco", no Extrato: pede o saldo
+ * do banco numa data, mostra a conta e só lança depois de confirmar. Mês fechado não muda: o acerto de um dia de mês fechado
  * entra no 1º dia do primeiro mês aberto depois dele (dataPara).
  */
 final class AcertoController
 {
     /**
-     * O acerto que faz a conferência bater: a diferença, ou a diferença sem o agendado quando ela fica menor (o banco
-     * pode já ter descontado o débito agendado, como na regra do "bate"). Null quando não há o que acertar.
+     * O acerto que faz a conferência bater: a menor entre a diferença, a diferença sem o agendado (o banco pode já ter
+     * descontado o débito agendado) e a diferença com o que foi lançado depois da conferência, no mesmo dia (o banco
+     * pode ainda não ter esse valor), como na regra do "bate". Null quando não há o que acertar.
      */
-    public static function sugestao(float $dif, float $agendado = 0.0): ?float
+    public static function sugestao(float $dif, float $agendado = 0.0, float $posterior = 0.0): ?float
     {
-        $v = abs($agendado) >= 0.005 && abs($dif - $agendado) < abs($dif) ? $dif - $agendado : $dif;
+        $v = $dif;
+        foreach ([abs($agendado) >= 0.005 ? $dif - $agendado : null, abs($posterior) >= 0.005 ? $dif + $posterior : null] as $outra) {
+            if ($outra !== null && abs($outra) < abs($v)) {
+                $v = $outra;
+            }
+        }
         $v = round($v, 2);
         return abs($v) >= 0.005 ? $v : null;
     }
@@ -88,24 +93,6 @@ final class AcertoController
             return t('Saldo acertado: {valor} em {data}', ['valor' => moneySigned($feitos[0]['valor']), 'data' => diaMes($feitos[0]['data'])]);
         }
         return t('Saldo acertado em {n} contas: {valores}', ['n' => count($feitos), 'valores' => implode(', ', array_map(static fn(array $f): string => moneySigned($f['valor']), $feitos))]);
-    }
-
-    /** POST /acertos/conferencia — o botão "Acertar o saldo": acerta a última conferência, com o valor que o servidor calcula de novo. */
-    public function daConferencia(): void
-    {
-        Auth::requireLogin();
-        csrfCheck();
-        $volta = voltaSegura(is_string($_POST['volta'] ?? null) ? $_POST['volta'] : null, '/');
-        $conf = DashboardController::conferenciaAtual(Relogio::hoje());
-        $acertos = $conf['acertos'] ?? [];
-        if ($acertos === []) {
-            // o segundo clique, ou outra pessoa já acertou: a conferência já conta com o acerto
-            flash('success', t('O saldo já bate com o banco. Não há nada para acertar.'));
-            redirecionar($volta, 303);
-        }
-        $feitos = self::gravar($acertos);
-        self::avisoComDesfazer($feitos, $volta);
-        redirecionar($volta, 303);
     }
 
     /** GET /acertos/novo — o saldo do banco numa data, de cada conta; o app mostra a conta antes de lançar. */

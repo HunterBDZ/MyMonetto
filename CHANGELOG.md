@@ -4,6 +4,11 @@ Cada versão publicada é uma tag `vX.Y.Z` deste repositório. Pacotes atualizam
 
 > **Nota:** a partir do redesenho, o app se chama **MyMonetto**. Os comandos, as pastas de dados e o serviço continuam com o nome antigo (`financeiro`).
 
+## 2.1.4
+
+- **Início:** saiu o "Conferir com o banco", e o "Precisa de atenção" não avisa mais a conferência que não bateu. Para comparar com o banco, use o **Saldo** do resumo do Extrato; para lançar uma diferença, "Acertar saldo com o banco", no menu ⋯ do Extrato. O Fechar o mês continua aceitando o saldo do banco.
+- **Conferência e lançamento do mesmo dia:** um lançamento com a data da conferência, registrado depois dela, não vira mais diferença. Ele pode ter acontecido depois da consulta ao banco, como uma compra feita depois de conferir.
+
 ## 2.1.3
 
 - **Metas sem o cartão:** as Metas contam só o que saiu da conta, como o Mês. A compra no cartão não entra mais na categoria dela: ela conta pela fatura paga. O mesmo vale para o aviso de meta no "Precisa de atenção" e para o "ainda dá para gastar" depois de lançar. O "Para onde foi" continua mostrando cada compra na categoria dela, com a troca "Ver por fatura".

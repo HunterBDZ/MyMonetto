@@ -84,4 +84,39 @@ final class SaldoConferenciaModel
         $stmt->execute(['data' => $data, 'criado' => $criado] + ($conta !== null ? ['conta' => $conta] : []));
         return round((float) $stmt->fetchColumn(), 2);
     }
+
+    /**
+     * "Depois, no mesmo dia": Σ sinal·valor dos lançamentos com a data DA conferência registrados DEPOIS dela (e, numa
+     * conferência de uma conta, as transferências dela). O banco pode não ter tido esses valores na hora da consulta: a
+     * compra das 19:21 lançada depois de conferir às 19:03 fazia a conferência daquele dia "não bater" por 25,00, e o
+     * acerto sugerido desfaria a compra. Só vale para a conferência do próprio dia; a de um dia passado é o saldo do fim
+     * daquele dia, que já tem tudo (como em agendadoNa).
+     */
+    public static function posterioresNoDia(array $conferencia): float
+    {
+        $data = (string) ($conferencia['data'] ?? '');
+        $criado = (string) ($conferencia['criado_em'] ?? '');
+        if ($data === '' || $criado === '' || $data !== substr($criado, 0, 10)) {
+            return 0.0;
+        }
+        $conta = isset($conferencia['conta_id']) ? (int) $conferencia['conta_id'] : null;
+        $pdo = Database::connection();
+        $st = $pdo->prepare(
+            'SELECT COALESCE(SUM(l.valor * c.sinal), 0)
+             FROM lancamentos l
+             JOIN categorias c ON c.id = l.categoria_id
+             WHERE l.data = :data AND l.criado_em > :criado' . ($conta !== null ? ' AND l.conta_id = :conta' : '')
+        );
+        $st->execute(['data' => $data, 'criado' => $criado] + ($conta !== null ? ['conta' => $conta] : []));
+        $soma = (float) $st->fetchColumn();
+        if ($conta !== null) {
+            $st = $pdo->prepare(
+                'SELECT COALESCE(SUM(CASE WHEN para_conta_id = :c1 THEN valor ELSE -valor END), 0) FROM transferencias
+                 WHERE data = :data AND criado_em > :criado AND (para_conta_id = :c2 OR de_conta_id = :c3)'
+            );
+            $st->execute(['c1' => $conta, 'c2' => $conta, 'c3' => $conta, 'data' => $data, 'criado' => $criado]);
+            $soma += (float) $st->fetchColumn();
+        }
+        return round($soma, 2);
+    }
 }

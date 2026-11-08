@@ -51,27 +51,11 @@ test('Acertar saldo pelo Extrato: o saldo de um dia de outubro (fechado) entra e
     await expect(page.locator('tr.ext-acerto')).toHaveCount(0);
 });
 
-test('Conferir no Início com diferença de centavos: o aviso oferece "Acertar o saldo"', async ({ page }) => {
-    await page.goto('/acertos/novo');
-    const app = ler(await page.locator('#ac-app').innerText());
+test('o Início não tem o Conferir com o banco, nem o aviso da conferência (2.1.4)', async ({ page }) => {
     await page.goto('/');
-    await page.locator('#conferir summary').click();
-    await page.locator('.ini-conf-form input[name="saldo_informado"]').fill(escrever(app - 0.25));
-    await page.locator('.ini-conf-form').getByRole('button', { name: 'Conferir' }).click();
-
-    const aviso = page.getByRole('status').filter({ hasText: 'Saldo conferido' });
-    await expect(aviso).toContainText('Diferença de −R$ 0,25');
-    // o próprio Conferir também oferece o acerto
-    await page.locator('#conferir summary').click();
-    await expect(page.locator('.ini-conf-acerto')).toContainText('O banco mostra R$ 0,25 a menos que o app');
-    await aviso.getByRole('button', { name: 'Acertar o saldo' }).click();
-
-    const feito = page.getByRole('status').filter({ hasText: 'Saldo acertado' });
-    await expect(feito).toContainText('−R$ 0,25');
-    await page.locator('#conferir summary').click();
-    await expect(page.locator('.ini-conf-acerto')).toHaveCount(0);
-    await expect(page.locator('.ini-conf-ult')).toContainText('Bate');
-
-    await feito.getByRole('button', { name: 'desfazer' }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Acerto excluído' })).toBeVisible();
+    await expect(page.locator('#conferir')).toHaveCount(0);
+    await expect(page.getByText('Conferir com o banco')).toHaveCount(0);
+    await expect(page.getByText('A conferência com o banco não bateu')).toHaveCount(0);
+    await page.goto('/atencao');
+    await expect(page.locator('[data-aviso="conferencia"]')).toHaveCount(0);
 });

@@ -41,7 +41,6 @@ $router->post('/logout', [AuthController::class, 'logout']);
 // ---- início
 $router->get('/', [DashboardController::class, 'index']);
 $router->get('/atencao', [DashboardController::class, 'atencao']);
-$router->post('/conferir', [DashboardController::class, 'conferir']);
 $router->post('/roteiro/dispensar', [DashboardController::class, 'dispensarRoteiro']);
 $router->get('/ajuda', [AjudaController::class, 'index']);
 $router->get('/ajuda/conexao', [AjudaController::class, 'conexao']);
@@ -65,7 +64,6 @@ $router->post('/transferencias/{id}', [TransferenciaController::class, 'atualiza
 // ---- acertos de saldo com o banco
 $router->get('/acertos/novo', [AcertoController::class, 'novo']);
 $router->post('/acertos', [AcertoController::class, 'criar']);
-$router->post('/acertos/conferencia', [AcertoController::class, 'daConferencia']);
 $router->post('/acertos/desfazer', [AcertoController::class, 'desfazer']);
 $router->get('/acertos/{id}', [AcertoController::class, 'ver']);
 $router->post('/acertos/{id}/excluir', [AcertoController::class, 'excluir']);

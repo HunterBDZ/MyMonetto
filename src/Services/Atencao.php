@@ -13,11 +13,12 @@ use Financeiro\Relogio;
 /**
  * "Precisa de atenção", no Início: o que pede uma ação agora, do mais urgente para o menos. Nenhum número novo: cada
  * aviso vem do que o app já calcula (ChecklistContas, CartaoFatura::painel, a meta do mês contra o gasto como as
- * Metas contam (MetaController::gastosDoMes), a situação dos meses e a última conferência com o banco). Vencimento
- * em dia que não é útil só atrasa depois do próximo dia útil (DiaUtil), aqui como no Mês e no Cartão.
+ * Metas contam (MetaController::gastosDoMes) e a situação dos meses). A conferência com o banco não vira aviso desde
+ * a 2.1.4, a pedido do dono. Vencimento em dia que não é útil só atrasa depois do próximo dia útil (DiaUtil), aqui
+ * como no Mês e no Cartão.
  *
  * Ordem: contas e faturas atrasadas; as que vencem em até DIAS dias; mês anterior aberto depois do dia DIA_FECHAR;
- * fatura fechada que vence depois; conferência que não bateu; meta estourada. No mesmo nível, a data mais próxima.
+ * fatura fechada que vence depois; meta estourada. No mesmo nível, a data mais próxima.
  */
 final class Atencao
 {
@@ -31,11 +32,10 @@ final class Atencao
     public const DIA_FECHAR = 5;
 
     /**
-     * @param ?array $conf a última conferência, como o Início a mostra (DashboardController::conferenciaAtual)
      * @return list<array{tipo:string, nivel:int, data:string, titulo:string, detalhe:string, acao:string, href:string}>
-     *   tipo: conta_atrasada | conta_vence | fatura_vencida | fatura_vence | fatura_fechada | mes_aberto | conferencia | meta
+     *   tipo: conta_atrasada | conta_vence | fatura_vencida | fatura_vence | fatura_fechada | mes_aberto | meta
      */
-    public static function avisos(string $hoje, ?array $conf = null): array
+    public static function avisos(string $hoje): array
     {
         $meses = array_column(MesModel::todos(), 'situacao', 'mes');
         if ($meses === []) {
@@ -84,13 +84,6 @@ final class Atencao
                     break;
                 }
             }
-        }
-
-        // a última conferência com o banco não bateu
-        if ($conf !== null && empty($conf['bate'])) {
-            $out[] = self::aviso('conferencia', 4, (string) $conf['data'], t('A conferência com o banco não bateu'),
-                t('Diferença de {dif}, em {data}', ['dif' => moneySigned((float) $conf['dif']), 'data' => diaMes((string) $conf['data'])]),
-                t('Conferir'), '/?conferir=1#conferir');
         }
 
         // categoria que passou da meta no mês, a que passou mais primeiro: a meta do mês (com as mudanças de

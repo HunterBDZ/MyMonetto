@@ -3,11 +3,10 @@
  * Início: a resposta. O topo é o contexto ("Novembro de 2026" e o dia); o painel responde quanto dá para gastar até o
  * fim do mês, com a barra "para onde vai o dinheiro do mês" (Services\Destino); a faixa de números diz o que já
  * aconteceu (em conta hoje, entrou, gasto e guardado); as contas do mês com Pagar e o carimbo, ao lado dos últimos
- * lançamentos por dia; embaixo, para onde foi o gasto e conferir com o banco. "Precisa de atenção" só aparece quando
+ * lançamentos por dia; embaixo, para onde foi o gasto. "Precisa de atenção" só aparece quando
  * há algo, sem repetir o que as contas do mês já mostram.
  * Sem nenhum lançamento e sem dinheiro previsto, a tela diz para que serve e oferece o primeiro lançamento.
- * Variáveis: $hoje, $mesRef, $mesCal, $estadoRef, $reserva, $conta, $contas (só com várias), $conf, $conferirAberto,
- * $conferirErro, $painel, $sobra (Sobra), $resposta (DashboardController::resposta), $mesPrevisao, $ultimos, $avisos,
+ * Variáveis: $hoje, $mesRef, $mesCal, $estadoRef, $reserva, $conta, $contas (só com várias), $painel, $sobra (Sobra), $resposta (DashboardController::resposta), $mesPrevisao, $ultimos, $avisos,
  * $contasMes (a pagar), $contasPagas, $destino (Destino::doMes), $guardado, $temLancamento, $roteiro, $somasDia (a soma
  * do dia inteiro de cada dia à vista). O lançamento agendado (depois de hoje) aparece em cinza, com "agendado", como no
  * Extrato, e fica fora do "Gastou" e do "Já saiu" até o dia dele.
@@ -314,56 +313,6 @@ $vazio = !$temLancamento && ($destino === null || $destino['total'] < 0.005);
                 <?php endif; ?>
             </section>
 
-            <!-- conferir com o banco: o único jeito de validar o saldo calculado -->
-            <details class="ini-conf" id="conferir"<?= $conferirAberto ? ' open' : '' ?>>
-                <summary>
-                    <span class="ini-conf-t"><?= e(t('Conferir com o banco')) ?></span>
-                    <span class="ini-conf-ult num<?= $conf !== null && !$conf['bate'] ? ' atencao' : '' ?>">
-                        <?php if ($conf !== null): $acertoConf = round(array_sum(array_column($conf['acertos'] ?? [], 'valor')), 2); ?>
-                            <?= e($conf['bate'] && abs($acertoConf) < 0.005 ? t('Bate, em {data}', ['data' => diaMes($conf['data'])]) : t('Diferença de {dif}, em {data}', ['dif' => moneySigned($conf['bate'] ? $acertoConf : $conf['dif']), 'data' => diaMes($conf['data'])])) ?>
-                        <?php else: ?>
-                            <?= e(t('Nunca conferido')) ?>
-                        <?php endif; ?>
-                    </span>
-                </summary>
-                <?php if (!empty($conf['acertos'])): $acs = $conf['acertos']; $um = count($acs) === 1 ? reset($acs) : null; ?>
-                    <form class="ini-conf-acerto" method="post" action="/acertos/conferencia">
-                        <?= $csrf ?>
-                        <input type="hidden" name="volta" value="/">
-                        <p class="num"><?= e($um !== null
-                            ? ($um['valor'] < 0 ? t('O banco mostra {valor} a menos que o app em {data}.', ['valor' => money(abs($um['valor'])), 'data' => diaMes($um['data'])])
-                                                : t('O banco mostra {valor} a mais que o app em {data}.', ['valor' => money(abs($um['valor'])), 'data' => diaMes($um['data'])]))
-                            : tn(count($acs), '1 conta tem diferença com o banco.', '{n} contas têm diferença com o banco: {valores}.', ['valores' => implode(', ', array_map(static fn(array $a): string => moneySigned($a['valor']), $acs))])) ?>
-                            <?= e(t('O acerto lança a diferença, e o saldo volta a bater.')) ?></p>
-                        <button type="submit" class="btn btn-contorno btn-sm"><?= e(t('Acertar o saldo')) ?></button>
-                    </form>
-                <?php endif; ?>
-                <form class="ini-conf-form" method="post" action="/conferir">
-                    <?= $csrf ?>
-                    <input type="hidden" name="volta" value="/">
-                    <?php if ($contas !== []): ?>
-                        <?php View::partial('partials/saldos_contas', ['contas' => array_values(array_filter($contas, static fn(array $c): bool => $c['ativa'])), 'digitado' => (array) ($conferirErro['contas'] ?? []), 'pref' => 'conf', 'invalido' => $conferirErro !== null, 'confs' => $conf['contas'] ?? []]); ?>
-                        <?php if ($conferirErro !== null): ?><p class="campo-erro" id="conf-erro" role="alert"><?= e((string) $conferirErro['msg']) ?></p><?php endif; ?>
-                    <?php else: ?>
-                    <label class="campo">
-                        <span><?= e(t('Saldo que o banco mostra')) ?></span>
-                        <input type="text" name="saldo_informado" inputmode="decimal" autocomplete="off" enterkeyhint="done" placeholder="<?= e(t('ex.: 1.546,00')) ?>"
-                               value="<?= e((string) ($conferirErro['valor'] ?? '')) ?>"<?= $conferirErro !== null ? ' aria-invalid="true" aria-describedby="conf-erro" data-autofocus' : '' ?>>
-                        <?php if ($conferirErro !== null): ?><span class="campo-erro" id="conf-erro" role="alert"><?= e((string) $conferirErro['msg']) ?></span><?php endif; ?>
-                    </label>
-                    <?php endif; ?>
-                    <fieldset class="quando" data-quando>
-                        <legend class="sr-only"><?= e(t('quando')) ?></legend>
-                        <label class="chip-r"><input type="radio" name="quando" value="hoje"<?= ($conferirErro['quando'] ?? 'hoje') !== 'outro' ? ' checked' : '' ?>><span><?= e(t('Hoje')) ?></span></label>
-                        <label class="chip-r"><input type="radio" name="quando" value="outro"<?= ($conferirErro['quando'] ?? '') === 'outro' ? ' checked' : '' ?>><span><?= e(t('Outro dia')) ?></span></label>
-                        <input type="date" name="data" class="quando-data" value="<?= e((string) ($conferirErro['data'] ?? $hoje)) ?>" max="<?= e($hoje) ?>" aria-label="<?= e(t('data do saldo')) ?>">
-                    </fieldset>
-                    <?php if ($conf !== null && $contas === []): ?>
-                        <p class="ini-nota num"><?= e(t('Última conferência: {valor} em {data}.', ['valor' => num($conf['saldo']), 'data' => diaMes($conf['data'])])) ?></p>
-                    <?php endif; ?>
-                    <button type="submit" class="btn btn-contorno ini-conf-btn"><?= e(t('Conferir')) ?></button>
-                </form>
-            </details>
         </div>
     </div>
 <?php endif; ?>

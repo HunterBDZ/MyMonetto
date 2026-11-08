@@ -1592,7 +1592,8 @@ $emTransacao('conferência com várias contas', static function () use ($pdo, $c
     $check('conferência: com a segunda conta, a de antes continua, como a da conta principal', $antes !== null && $depois !== null && $depois['data'] === $hoje
         && abs($depois['dif'] - 11.06) < 0.005 && !$depois['bate'] && abs($antes['dif'] - $depois['dif']) < 0.005, json_encode([$antes, $depois]));
     $check('conferência: o Relatório diz o mesmo que o Início', $rel['tipo'] === 'dif' && str_contains($rel['texto'], money(11.06)), json_encode($rel));
-    $check('conferência: e o "Precisa de atenção" também', in_array('conferencia', array_column(\Financeiro\Services\Atencao::avisos($hoje, $depois), 'tipo'), true));
+    // o "Precisa de atenção" não fala da conferência desde a 2.1.4 (o dono não quer o aviso nem o Conferir do Início)
+    $check('conferência: o "Precisa de atenção" não avisa a conferência que não bateu', !in_array('conferencia', array_column(\Financeiro\Services\Atencao::avisos($hoje), 'tipo'), true));
 });
 ContaModel::limparCache();
 LancarForm::limparCache();
@@ -1755,10 +1756,25 @@ $emTransacao('acerto de saldo', static function () use ($pdo, $check, $render, $
     $conf = DashboardController::conferenciaAtual($hoje);
     $check('acerto: diferença de centavos bate, mas a conferência oferece o acerto', $conf !== null && $conf['bate']
         && abs((float) ($conf['acertos'][$conta]['valor'] ?? 0) + 0.37) < 0.005 && ($conf['acertos'][$conta]['data'] ?? '') === $hoje, json_encode($conf));
+    // conferiu às 19:03 com o saldo certo, e depois lançou uma compra do mesmo dia (feita às 19:21): a conferência
+    // continua batendo, e não oferece um acerto que desfaria a compra
+    $pdo->exec('DELETE FROM saldo_conferencias');
+    \Financeiro\Models\SaldoConferenciaModel::registrar($hoje, round($emConta0, 2), $uid);
+    $pdo->exec("UPDATE saldo_conferencias SET criado_em = datetime(criado_em, '-1 hour')");
+    $idDepois = LancamentoModel::criar($hoje, 'compra depois de conferir', (int) $pdo->query("SELECT id FROM categorias WHERE sinal = -1 AND operacional = 1 AND ativo = 1 ORDER BY id LIMIT 1")->fetchColumn(), 25.0, $uid);
+    MotorFinanceiro::limparCache();
+    $confDepois = DashboardController::conferenciaAtual($hoje);
+    $check('conferência: lançamento do mesmo dia registrado depois dela não vira diferença nem acerto', $confDepois !== null && $confDepois['bate']
+        && $confDepois['acertos'] === [] && abs($confDepois['dif'] - 25.0) < 0.005, json_encode($confDepois));
+    $pdo->prepare('DELETE FROM lancamentos WHERE id = ?')->execute([$idDepois]);
+    $pdo->exec('DELETE FROM saldo_conferencias');
+    \Financeiro\Models\SaldoConferenciaModel::registrar($hoje, round($emConta0 - 0.37, 2), $uid);
+    MotorFinanceiro::limparCache();
     $previa = AcertoController::previa([$conta => round($emConta0 - 0.37, 2)], $hoje);
     $check('acerto: a prévia do Extrato faz a mesma conta', abs((float) $previa[$conta]['acerto'] + 0.37) < 0.005 && $previa[$conta]['entra'] === $hoje, json_encode($previa));
     $check('acerto: sem diferença, nada a acertar', AcertoController::sugestao(0.004) === null && AcertoController::sugestao(-0.37) === -0.37
-        && AcertoController::sugestao(25.0, 25.0) === null && AcertoController::sugestao(25.37, 25.0) === 0.37);
+        && AcertoController::sugestao(25.0, 25.0) === null && AcertoController::sugestao(25.37, 25.0) === 0.37
+        && AcertoController::sugestao(25.0, 0.0, -25.0) === null && AcertoController::sugestao(25.08, 0.0, -25.0) === 0.08);
 
     $id = \Financeiro\Models\AcertoModel::criar(AcertoController::dataPara($hoje), $hoje, $conta, -0.37, '', $uid);
     MotorFinanceiro::limparCache();
@@ -3371,9 +3387,9 @@ if (($sitT['2026-11-01'] ?? '') !== 'PREVISAO' || ($sitT['2026-12-01'] ?? '') !=
     $check('atenção', false, 'a demonstração ficou sem novembro e dezembro de 2026 abertos ou sem as categorias');
 } else {
     $emTransacao('atenção', static function () use ($pdo, $check, $catAtT, $catDiaT, $uid, $render): void {
-        $tipos = static function (string $hoje, ?array $conf = null): array {
+        $tipos = static function (string $hoje): array {
             \Financeiro\Services\GastosMensais::limparCache();
-            return array_column(\Financeiro\Services\Atencao::avisos($hoje, $conf), 'tipo');
+            return array_column(\Financeiro\Services\Atencao::avisos($hoje), 'tipo');
         };
         // só o que o teste cria: sem as contas, metas, conferências e cartões da demonstração
         $pdo->exec('UPDATE contas_recorrentes SET ativo = 0');
@@ -3414,13 +3430,11 @@ if (($sitT['2026-11-01'] ?? '') !== 'PREVISAO' || ($sitT['2026-12-01'] ?? '') !=
         MotorFinanceiro::limparCache();
         $check('atenção: mês fechado, o aviso some', !in_array('mes_aberto', $tipos('2026-12-06'), true));
 
-        // conferência que não bateu
-        $confRuim = ['data' => '2026-12-01', 'saldo' => 10.0, 'dif' => -12.5, 'agendado' => 0.0, 'bate' => false, 'idade' => 2];
-        $check('atenção: conferência que não bateu aparece; a que bate, não', in_array('conferencia', $tipos('2026-12-03', $confRuim), true)
-            && !in_array('conferencia', $tipos('2026-12-03', ['bate' => true] + $confRuim), true));
+        // a conferência que não bateu não vira aviso (2.1.4, a pedido do dono)
         if (!ContaModel::varias()) {
             \Financeiro\Models\SaldoConferenciaModel::registrar('2026-11-22', 1.0, $uid);
-            $check('atenção: a conferência do Início que não bateu vira aviso', in_array('conferencia', $tipos('2026-12-03', DashboardController::conferenciaAtual('2026-12-03')), true));
+            $check('atenção: a conferência que não bateu não vira aviso', DashboardController::conferenciaAtual('2026-12-03')['bate'] === false
+                && !in_array('conferencia', $tipos('2026-12-03'), true));
         }
 
         // meta estourada no mês
@@ -3866,7 +3880,7 @@ if (Sql::sqlite()) {
     $check('uma conta: o lançar não mostra conta, Transferir nem "Recebeu em"', !str_contains($h1Lanc, 'name="modo"') && !str_contains($h1Lanc, 'is-varias')
         && !str_contains($h1Lanc, 'data-lf-entra') && str_contains($h1Lanc, 'name="pagou" value="conta" checked') && str_contains($h1Lanc, 'name="pagou" value="cartao"'));
     $check('uma conta: o Início, o Extrato e o Fechar são os de sempre', !str_contains($h1Ini, 'saldo-contas') && !str_contains($h1Ini, 'saldo_conta[')
-        && str_contains($h1Ini, 'name="saldo_informado"') && !str_contains($h1Ext, 'name="conta"') && !str_contains($h1Ext, 'ex-transf')
+        && !str_contains($h1Ini, 'name="saldo_informado"') && !str_contains($h1Ini, 'id="conferir"') && !str_contains($h1Ext, 'name="conta"') && !str_contains($h1Ext, 'ex-transf')
         && str_contains($h1Ext, 'Mais filtros: valor e quem lançou') && str_contains($h1Fe, 'name="saldo"') && !str_contains($h1Fe, 'saldo_conta['));
     $check('uma conta: Ajustes tem Contas e o saldo do início continua no ponto de partida', str_contains($h1Aj, 'id="carteira"') && str_contains($h1Aj, 'valores[saldo_ini]'));
     $check('um cartão: sem seletor de cartões; "Novo cartão" fica no menu', !str_contains($h1Ct, 'ct-cartoes"') && str_contains($h1Ct, 'class="menu-item" href="/cartao?novo=1"'));
@@ -3903,8 +3917,8 @@ if (Sql::sqlite()) {
             && str_contains($hLanc, 'name="de_conta"') && str_contains($hLanc, 'data-so-gasto'));
         $check('várias contas: o padrão do "Pagou com" é o da última vez', str_contains($hLanc, 'value="conta:' . $id2 . '" checked data-lf-padrao'));
         $hIni = $render(DashboardController::class, 'index', []);
-        $check('várias contas: o Início mostra o total e, nos detalhes, cada conta; conferir pede cada uma', str_contains($hIni, 'class="saldo-contas num"')
-            && str_contains($hIni, 'Carteira teste') && str_contains($hIni, 'name="saldo_conta[' . $id2 . ']"') && !str_contains($hIni, 'name="saldo_informado"'));
+        $check('várias contas: o Início mostra o total e, nos detalhes, cada conta, sem o Conferir (2.1.4)', str_contains($hIni, 'class="saldo-contas num"')
+            && str_contains($hIni, 'Carteira teste') && !str_contains($hIni, 'name="saldo_conta[') && !str_contains($hIni, 'id="conferir"'));
         $hExt = $render(LancamentosController::class, 'index', ['conta' => (string) $id2]);
         $check('várias contas: o Extrato filtra pela conta, com o saldo dela e a transferência, fora dos totais', str_contains($hExt, 'class="ext-saldo-conta"')
             && str_contains($hExt, valor(195.0)) && str_contains($hExt, 'saque teste') && str_contains($hExt, 'ext-transf') && str_contains($hExt, '↔ +80,00')

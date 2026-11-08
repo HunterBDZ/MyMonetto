@@ -58,9 +58,8 @@ final class DashboardController
         $saldoIni = AjusteModel::valor('saldo_ini');
         $matriz   = GastosMensais::matriz($ehHoje ? null : $hoje);
 
-        // com mais de uma conta: o saldo de cada uma (o total continua o do plano) e a conferência de cada uma
+        // com mais de uma conta: o saldo de cada uma (o total continua o do plano)
         $contas = ContaModel::varias() ? self::contasHoje($hoje) : [];
-        $conf  = self::conferenciaAtual($hoje);
 
         // CONTA (invariante 4): fica_na_conta do mês do CALENDÁRIO quando ele está REAL;
         // senão, o saldo calculado pelos lançamentos até hoje.
@@ -74,16 +73,8 @@ final class DashboardController
         $sobra = $estadoRef === 'previsto' ? Sobra::prevista($linhaRef) : (Sobra::ateHoje($mesRef, $ehHoje ? null : $hoje) ?? Sobra::prevista($linhaRef));
         $ultimos = LancamentoModel::listar($mesRef, ['limite' => 6]);
 
-        // "Precisa de atenção": contas e faturas vencendo ou atrasadas, mês anterior aberto, conferência, metas
-        $avisos = Atencao::avisos($hoje, $conf);
-
-        // erro da conferência volta pelo ?conferir=erro#conferir (a mensagem fica na sessão)
-        $conferirErro = null;
-        $conferirAberto = isset($_GET['conferir']);
-        if (($_GET['conferir'] ?? '') === 'erro' && is_array($_SESSION['conferir_erro'] ?? null)) {
-            $conferirErro = $_SESSION['conferir_erro'];   // recarregar a página não repete o erro
-        }
-        unset($_SESSION['conferir_erro']);
+        // "Precisa de atenção": contas e faturas vencendo ou atrasadas, mês anterior aberto, metas
+        $avisos = Atencao::avisos($hoje);
 
         $previsaoFim = $linhaPrev['situacao'] !== 'REAL' ? (float) $linhaPrev['fica_na_conta'] : null;
         $fimSemAdiantar = $previsaoFim !== null ? self::fimSemAdiantar($linhaPrev, $mesPrev, $hoje) : null;
@@ -102,9 +93,6 @@ final class DashboardController
             'roteiro'        => self::roteiro(),
             'conta'          => $conta,
             'contas'         => $contas,
-            'conf'           => $conf,
-            'conferirAberto' => $conferirAberto || $conferirErro !== null,
-            'conferirErro'   => $conferirErro,
             'painel'         => $painel,
             'sobra'          => $sobra,
             'ultimos'        => $ultimos,
@@ -161,13 +149,13 @@ final class DashboardController
         $hoje = self::hoje();
         View::render('dashboard/atencao', [
             'pageTitle' => t('precisa de atenção · MyMonetto'),
-            'avisos'    => Atencao::avisos($hoje, self::conferenciaAtual($hoje)),
+            'avisos'    => Atencao::avisos($hoje),
         ], 'inicio');
     }
 
     /**
-     * A última conferência com o banco até $hoje (e desde $desde), a mesma no Início, no "Precisa de atenção" e no
-     * Relatório: a do total ou, com várias contas, a de cada uma. A do total feita quando havia uma conta só vale
+     * A última conferência com o banco até $hoje (e desde $desde), a mesma no Relatório e no aviso do Fechar o mês
+     * (o Conferir do Início e o aviso do "Precisa de atenção" saíram na 2.1.4, a pedido do dono): a do total ou, com várias contas, a de cada uma. A do total feita quando havia uma conta só vale
      * como a da Conta principal, a conta que existia: criar a segunda conta não apaga a conferência de antes, e ela
      * continua comparada só com o saldo daquela conta.
      */
@@ -176,99 +164,6 @@ final class DashboardController
         return ContaModel::varias()
             ? self::conferenciaContas(self::contasHoje($hoje), $hoje, $desde)
             : self::conferencia(AjusteModel::valor('saldo_ini'), $hoje, $desde);
-    }
-
-    /** POST /conferir — saldo do banco numa data (hoje ou outro dia), com volta. */
-    public function conferir(): void
-    {
-        Auth::requireLogin();
-        csrfCheck();
-
-        $hoje  = Relogio::hoje();
-        $volta = voltaSegura(is_string($_POST['volta'] ?? null) ? $_POST['volta'] : null, '/');
-        if (is_array($_POST['saldo_conta'] ?? null) && ContaModel::varias()) {
-            self::conferirContas($hoje, $volta);
-        }
-        $bruto = is_string($_POST['saldo_informado'] ?? null) ? trim($_POST['saldo_informado']) : '';
-        $dataPost = is_string($_POST['data'] ?? null) ? trim($_POST['data']) : '';
-        $quando = is_string($_POST['quando'] ?? null) ? $_POST['quando'] : ($dataPost !== '' ? 'outro' : 'hoje');
-        $data = $quando === 'outro' ? $dataPost : $hoje;
-
-        // limite: até 60 dias atrás, nunca antes do saldo inicial (véspera do 1º mês), nunca no futuro
-        $minimo = date('Y-m-d', strtotime('-60 days', strtotime($hoje)));
-        $primeiro = MesModel::primeiroDia();
-        if ($primeiro !== null) {
-            $minimo = max($minimo, date('Y-m-d', strtotime('-1 day', strtotime($primeiro))));
-        }
-
-        $saldo = parseMoedaBr($bruto);
-        $erro = null;
-        if ($saldo === null) {
-            $erro = t('Digite o saldo como aparece no banco, por exemplo 1.200,50.');
-        } elseif (!in_array($quando, ['hoje', 'outro'], true) || !self::dataIso($data) || $data > $hoje || $data < $minimo) {
-            $erro = t('Escolha uma data válida.');
-        }
-        if ($erro !== null) {
-            $_SESSION['conferir_erro'] = [
-                'msg' => $erro, 'valor' => mb_substr($bruto, 0, 32),
-                'quando' => $quando === 'outro' ? 'outro' : 'hoje', 'data' => self::dataIso($data) ? $data : $hoje,
-            ];
-            redirecionar('/?conferir=erro#conferir', 303);
-        }
-
-        SaldoConferenciaModel::registrar($data, $saldo, (int) Auth::id());
-        self::avisoConferido($data, $volta);
-        redirecionar($volta, 303);
-    }
-
-    /**
-     * Com várias contas, cada uma é conferida com o extrato dela, na mesma data (POST saldo_conta[id]). Em branco,
-     * a conta fica sem conferir.
-     */
-    private static function conferirContas(string $hoje, string $volta): never
-    {
-        $dataPost = is_string($_POST['data'] ?? null) ? trim($_POST['data']) : '';
-        $quando = is_string($_POST['quando'] ?? null) ? $_POST['quando'] : ($dataPost !== '' ? 'outro' : 'hoje');
-        $data = $quando === 'outro' ? $dataPost : $hoje;
-        [$saldos, $brutos, $erro] = self::lerSaldosContas((array) $_POST['saldo_conta']);
-        $minimo = date('Y-m-d', strtotime('-60 days', strtotime($hoje)));
-        $primeiro = MesModel::primeiroDia();
-        if ($primeiro !== null) {
-            $minimo = max($minimo, date('Y-m-d', strtotime('-1 day', strtotime($primeiro))));
-        }
-        if ($erro === null && $saldos === []) {
-            $erro = t('Digite o saldo de pelo menos uma conta.');
-        } elseif ($erro === null && (!in_array($quando, ['hoje', 'outro'], true) || !self::dataIso($data) || $data > $hoje || $data < $minimo)) {
-            $erro = t('Escolha uma data válida.');
-        }
-        if ($erro !== null) {
-            $_SESSION['conferir_erro'] = ['msg' => $erro, 'contas' => $brutos, 'quando' => $quando === 'outro' ? 'outro' : 'hoje', 'data' => self::dataIso($data) ? $data : $hoje];
-            redirecionar('/?conferir=erro#conferir', 303);
-        }
-        foreach ($saldos as $id => $v) {
-            SaldoConferenciaModel::registrar($data, $v, (int) Auth::id(), $id);
-        }
-        self::avisoConferido($data, $volta);
-        redirecionar($volta, 303);
-    }
-
-    /**
-     * O aviso depois de conferir (aqui ou no Fechar o mês): bateu, ou a diferença com o botão "Acertar o saldo", que lança
-     * o acerto da conferência (AcertoController::daConferencia). Qualquer diferença de centavo em diante pode ser acertada.
-     */
-    public static function avisoConferido(string $data, string $volta, ?string $antes = null): void
-    {
-        $conf = self::conferenciaAtual(Relogio::hoje());
-        $acertos = $conf !== null && $conf['data'] === $data ? ($conf['acertos'] ?? []) : [];
-        $msg = ($antes !== null ? $antes . ' · ' : '') . t('Saldo conferido com o banco em {data}.', ['data' => diaMes($data)]);
-        if ($acertos === []) {
-            flash('success', $msg);
-            return;
-        }
-        $soma = round(array_sum(array_column($acertos, 'valor')), 2);
-        flash('warn', $msg . ' · ' . t('Diferença de {valor}.', ['valor' => moneySigned($soma)]), [
-            'url' => '/acertos/conferencia', 'label' => t('Acertar o saldo'), 'campos' => ['volta' => $volta],
-        ]);
     }
 
     /**
@@ -329,8 +224,10 @@ final class DashboardController
             // o acerto de um mês fechado, que entrou no mês aberto, já conta para esta conferência (AcertoModel::pendentesNa)
             $dif = round((float) $u['saldo_informado'] - ContaModel::saldo($c['id'], (string) $u['data']) - AcertoModel::pendentesNa((string) $u['data'], $c['id']), 2);
             $agendado = SaldoConferenciaModel::agendadoNa($u);
+            $posterior = SaldoConferenciaModel::posterioresNoDia(['conta_id' => $c['id']] + $u);
             $por[$c['id']] = ['conta' => $c, 'data' => (string) $u['data'], 'saldo' => (float) $u['saldo_informado'], 'dif' => $dif,
-                              'bate' => abs($dif) <= 0.5 || abs($dif - $agendado) <= 0.5, 'acerto' => AcertoController::sugestao($dif, $agendado)];
+                              'bate' => abs($dif) <= 0.5 || abs($dif - $agendado) <= 0.5 || abs($dif + $posterior) <= 0.5,
+                              'acerto' => AcertoController::sugestao($dif, $agendado, $posterior)];
         }
         if ($por === []) {
             return null;
@@ -361,14 +258,15 @@ final class DashboardController
         // o acerto de um mês fechado, que entrou no mês aberto, já conta para esta conferência (AcertoModel::pendentesNa)
         $dif = round((float) $c['saldo_informado'] - LancamentoModel::saldoCalculado($saldoIni, $data) - AcertoModel::pendentesNa($data), 2);
         $agendado = SaldoConferenciaModel::agendadoNa($c);
-        $sugestao = AcertoController::sugestao($dif, $agendado);
+        $posterior = SaldoConferenciaModel::posterioresNoDia($c);
+        $sugestao = AcertoController::sugestao($dif, $agendado, $posterior);
         $idade = (int) (new \DateTimeImmutable($data))->diff(new \DateTimeImmutable($hoje))->format('%r%a');
         return [
             'data'     => $data,
             'saldo'    => (float) $c['saldo_informado'],
             'dif'      => $dif,
             'agendado' => $agendado,
-            'bate'     => abs($dif) <= 0.5 || abs($dif - $agendado) <= 0.5,
+            'bate'     => abs($dif) <= 0.5 || abs($dif - $agendado) <= 0.5 || abs($dif + $posterior) <= 0.5,
             'idade'    => $idade,
             // com uma conta só, ela recebe o acerto (conta_id => valor), como no caso de várias contas
             'acertos'  => $sugestao !== null ? [ContaModel::padrao() => ['valor' => $sugestao, 'data' => $data]] : [],
@@ -557,7 +455,6 @@ final class DashboardController
         $itens = [
             ['/lancar', t('Registre o seu primeiro gasto'), $tem('lancamentos')],
             ['/meta', t('Defina quanto quer gastar em uma categoria'), $tem('metas')],
-            ['/#conferir', t('Compare o saldo com o do banco'), $tem('saldo_conferencias')],
         ];
         return in_array(false, array_column($itens, 2), true) ? $itens : null;
     }
