@@ -4,6 +4,12 @@ Cada versão publicada é uma tag `vX.Y.Z` deste repositório. Pacotes atualizam
 
 > **Nota:** a partir do redesenho, o app se chama **MyMonetto**. Os comandos, as pastas de dados e o serviço continuam com o nome antigo (`financeiro`).
 
+## 2.2.0
+
+- **Início:** o cartão do topo virou um livro-caixa. À esquerda, a resposta: "Dá para gastar até dia 30" ou, quando não sobra nada, "Novembro fecha com" e o número com sinal (âmbar abaixo da reserva, vermelho no negativo). À direita, a conta: o dinheiro do mês, o que já saiu, o que ainda vai sair, a reserva e a soma. Saíram a legenda de cinco cores, as linhas zeradas e as frases embaixo do número.
+- **A barra do dinheiro do mês** agora tem a escala do dinheiro do mês: quando o que sai passa dele, uma marca mostra onde o dinheiro acaba e o que passa aparece hachurado em vermelho. Antes, a barra enchia como se tudo coubesse. Vale no Início e no Mês.
+- **Ajuda:** uma resposta nova explica o "fecha com".
+
 ## 2.1.4
 
 - **Início:** saiu o "Conferir com o banco", e o "Precisa de atenção" não avisa mais a conferência que não bateu. Para comparar com o banco, use o **Saldo** do resumo do Extrato; para lançar uma diferença, "Acertar saldo com o banco", no menu ⋯ do Extrato. O Fechar o mês continua aceitando o saldo do banco.

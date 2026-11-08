@@ -1871,6 +1871,26 @@ $emTransacao('acerto de saldo', static function () use ($pdo, $check, $render, $
 ContaModel::limparCache();
 LancarForm::limparCache();
 
+// ---- 9h4. O Início no vermelho: "Novembro fecha com" o número negativo, a causa na linha de apoio, a falta desenhada na
+// barra e o livro-caixa com a conta, que fecha no mesmo número do topo
+$emTransacao('início no vermelho', static function () use ($pdo, $check, $render, $mesHoje, $hoje, $uid): void {
+    $cat = (int) $pdo->query("SELECT id FROM categorias WHERE grupo = 'Ano' AND sinal = -1 AND ativo = 1 ORDER BY id LIMIT 1")->fetchColumn();
+    LancamentoModel::criar($hoje, 'gasto grande', $cat, 50000.0, $uid);
+    MotorFinanceiro::limparCache();
+    $d = \Financeiro\Services\Destino::doMes(MotorFinanceiro::dados(), MotorFinanceiro::calcularPlano()[$mesHoje], $mesHoje);
+    $html = $render(DashboardController::class, 'index', []);
+    $mesT = mb_convert_case(mesExtenso($mesHoje), MB_CASE_TITLE);
+    $check('início no vermelho: o topo diz como o mês fecha, com o número negativo', $d !== null && $d['falta'] > 0
+        && str_contains($html, 'data-resposta="vermelho"') && str_contains($html, e($mesT . ' fecha com'))
+        && str_contains($html, '<p class="resposta-num">' . valor(-$d['falta'], 'neutro', ['moeda' => true, 'classe' => 'alerta']) . '</p>')
+        && str_contains($html, 'href="/ajuda#fecha"') && !str_contains($html, 'Falta para zerar'), json_encode($d));
+    $check('início no vermelho: o topo é só o rótulo e o número, sem frase de apoio', !str_contains($html, 'class="por-dia"'));
+    $check('início no vermelho: a barra desenha a falta e o livro-caixa fecha no número do topo', str_contains($html, 'class="barra-falta"')
+        && str_contains($html, 'class="livro-mes-fim tom-alerta"') && str_contains($html, MENOS . num($d['falta']) . '</td>') && !str_contains($html, '<ul class="legenda">'));
+});
+ContaModel::limparCache();
+LancarForm::limparCache();
+
 // ---- 9i. As contas fecham: categoria tirada do mês (B-08), a barra no vermelho (B-12), o "por dia" (B-19), o ordinal (B-18)
 $emTransacao('as contas fecham', static function () use ($pdo, $check, $render, $mesHoje, $hoje, $uid): void {
     $comb = (int) $pdo->query("SELECT id FROM categorias WHERE nome = 'Combustível'")->fetchColumn();
@@ -1894,12 +1914,10 @@ $emTransacao('as contas fecham', static function () use ($pdo, $check, $render, 
 });
 $htmlIniD = $render(DashboardController::class, 'index', []);
 $diasT = (int) date('t', strtotime($hoje)) - (int) date('j', strtotime($hoje)) + 1;
-$check('por dia: conta hoje, e no último dia o valor é para hoje', $diasT > 1
-    ? str_contains($htmlIniD, 'nos ' . $diasT . ' dias que faltam, contando hoje') : str_contains($htmlIniD, 'Hoje é o último dia do mês:'));
+$check('Início: sem frase de apoio embaixo do número (o dono não quer subtexto)', !str_contains($htmlIniD, 'class="por-dia"') && $diasT >= 1);
 Idioma::usar('en');
 $check('inglês: o dia do mês é ordinal depois de "the"', t('Dá para gastar até dia {dia}', ['dia' => 30]) === 'You can spend until the 30th'
-    && implode(',', array_map('ordinalEn', [1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 31])) === '1st,2nd,3rd,4th,11th,12th,13th,21st,22nd,23rd,31st'
-    && t('Cerca de {valor} por dia nos {n} dias que faltam, contando hoje.', ['valor' => 'x', 'n' => 9]) === 'About x a day for the 9 days left, counting today.');
+    && implode(',', array_map('ordinalEn', [1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 31])) === '1st,2nd,3rd,4th,11th,12th,13th,21st,22nd,23rd,31st');
 Idioma::usar('es');
 $check('espanhol: o dia continua "el día 30"', t('Dá para gastar até dia {dia}', ['dia' => 30]) === 'Puede gastar hasta el día 30');
 Idioma::usar('pt');
@@ -2572,6 +2590,35 @@ $destinoT = (string) ob_get_clean();
 $check('destino: a barra tem um segmento por valor, a legenda tem todos e o leitor de tela ouve a conta',
     substr_count($destinoT, 'style="--v:') === 2 && str_contains($destinoT, 'style="--v:908.98"') && substr_count($destinoT, '<li') === 3
     && str_contains($destinoT, 'class="destaque"') && str_contains($destinoT, 'role="img" aria-label="De 3.307,64: já saiu 908,98; contas a pagar 0,00; dá para gastar 2.398,66."'));
+$check('destino: sem passar do dinheiro do mês, a barra não desenha falta', !str_contains($destinoT, 'barra-falta'));
+
+// no vermelho, a escala é a soma das partes: a marca fica onde o dinheiro do mês acaba, e o que passa dela é a falta
+ob_start();
+\Financeiro\View::partial('partials/destino', ['total' => 1000.0, 'legenda' => false, 'segmentos' => [
+    ['rotulo' => 'Já saiu', 'valor' => 900.0, 'classe' => 's-saiu'],
+    ['rotulo' => 'Ainda vai sair', 'valor' => 350.0, 'classe' => 's-previsto'],
+]]);
+$destinoV = (string) ob_get_clean();
+$check('destino: no vermelho, a barra desenha a falta depois de onde o dinheiro do mês acaba', str_contains($destinoV, 'class="barra-falta" style="--ate:0.8000"')
+    && str_contains($destinoV, 'Passa 250,00 do dinheiro do mês.') && !str_contains($destinoV, '<ul class="legenda">'));
+
+// o livro-caixa do Início: a conta fecha em cada estado, e a última linha é a resposta
+$livroDe = static fn(array $x): array => \Financeiro\Services\Destino::livro($x + ['veio' => 100.0, 'entradas' => 900.0, 'reservaMeta' => 200.0], '2026-11-01');
+$somaLivro = static fn(array $l): float => round(array_sum(array_column($l['linhas'], 'valor')), 2);
+$lG = $livroDe(['total' => 1000.0, 'saiu' => 400.0, 'contas' => 100.0, 'metas' => 50.0, 'gastar' => 250.0, 'reserva' => 200.0, 'falta' => 0.0, 'livre' => 450.0]);
+$check('livro-caixa: com folga, o dinheiro menos o que saiu, o que vai sair e a reserva dá o "Dá para gastar"', $lG['estado'] === 'gastar'
+    && $lG['fim']['rotulo'] === 'Dá para gastar' && abs($somaLivro($lG) - 250.0) < 0.005 && abs($lG['fim']['valor'] - 250.0) < 0.005
+    && array_column($lG['linhas'], 'rotulo') === ['Dinheiro de novembro', 'Já saiu', 'Ainda vai sair', 'Fica de reserva']
+    && !array_key_exists('nota', $lG['linhas'][0])
+    && abs(array_sum(array_column($lG['segmentos'], 'valor')) - 1000.0) < 0.005, json_encode($lG));
+$lV = $livroDe(['total' => 1000.0, 'saiu' => 1100.0, 'contas' => 0.0, 'metas' => 150.0, 'gastar' => 0.0, 'reserva' => 0.0, 'falta' => 250.0, 'livre' => -250.0]);
+$check('livro-caixa: no vermelho, "Fecha com" negativo, sem a reserva nem linha zerada', $lV['estado'] === 'vermelho' && $lV['fim']['rotulo'] === 'Fecha com'
+    && abs($lV['fim']['valor'] + 250.0) < 0.005 && abs($somaLivro($lV) - $lV['fim']['valor']) < 0.005 && $lV['fim']['tom'] === 'alerta'
+    && array_column($lV['linhas'], 'rotulo') === ['Dinheiro de novembro', 'Já saiu', 'Ainda vai sair'], json_encode($lV));
+$lA = $livroDe(['total' => 1000.0, 'saiu' => 800.0, 'contas' => 50.0, 'metas' => 0.0, 'gastar' => 0.0, 'reserva' => 150.0, 'falta' => 0.0, 'livre' => 150.0]);
+$check('livro-caixa: abaixo da reserva, "Fecha com" o que sobra, em âmbar', $lA['estado'] === 'abaixo' && $lA['fim']['rotulo'] === 'Fecha com'
+    && abs($lA['fim']['valor'] - 150.0) < 0.005 && $lA['fim']['tom'] === 'atencao' && abs($somaLivro($lA) - 150.0) < 0.005
+    && abs(array_sum(array_column($lA['segmentos'], 'valor')) - 1000.0) < 0.005, json_encode($lA));
 ob_start();
 \Financeiro\View::partial('partials/topo', ['mes' => '2026-11-01', 'meses' => [['mes' => '2026-10-01', 'situacao' => 'REAL'], ['mes' => '2026-11-01', 'situacao' => 'PREVISAO'], ['mes' => '2026-12-01', 'situacao' => 'PREVISAO']],
     'href' => '/mes?mes=', 'apoio' => 'Domingo, dia 22 de 30']);
@@ -3576,7 +3623,7 @@ $check('frase: o fim do mês igual à reserva porque a sobra adianta o emprésti
 $check('frase: o empréstimo leva só parte da folga', $fr(2000.0, 4000.0, 1500.0) === ['tipo' => 'gastar', 'valor' => 2500.0, 'adianta' => 2000.0]);
 $check('frase: sem previsão, sem frase', $fr(null, null, 1500.0) === null);
 $htmlFr = $render(DashboardController::class, 'index', []);
-$check('frase: o topo do Início é só o rótulo, o número e uma linha de apoio', preg_match('#<div class="painel ini-painel" data-resposta="\w+">\s*<h2 class="rot-resposta"[^>]*>[^<]+<a class="dica"[^>]*>\?</a></h2>\s*<p class="resposta-num">.*?</p>\s*(<p class="por-dia">.*?</p>\s*)?<div class="ini-destino"#s', $htmlFr) === 1);
+$check('frase: o topo do Início é só o rótulo, o número e uma linha de apoio, e a conta ao lado', preg_match('#<div class="painel ini-painel" data-resposta="\w+">\s*<div class="ini-resposta">\s*<h2 class="rot-resposta"[^>]*>[^<]+<a class="dica"[^>]*>\?</a></h2>\s*<p class="resposta-num">.*?</p>\s*(<p class="por-dia">.*?</p>\s*)?</div>\s*<div class="ini-destino".*?<table class="livro-mes"#s', $htmlFr) === 1);
 
 // o campo da categoria: a lista inteira, agrupada, num <select> (sem JS) e no combobox do lancar.js
 LancarForm::limparCache();

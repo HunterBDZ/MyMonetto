@@ -21,8 +21,10 @@ final class Destino
      * @param array $dados MotorFinanceiro::dados()
      * @param array $linha a linha do mês no plano (MotorFinanceiro::calcular()[mes])
      * @param string $mesHoje o mês de hoje, Y-m-01
-     * @return ?array{total:float, saiu:float, contas:float, metas:float, gastar:float, reserva:float, falta:float, livre:float}
-     *   livre = o que fica na conta no fim do mês sem o adiantamento automático do empréstimo (gastar + reserva − falta)
+     * @return ?array{total:float, saiu:float, contas:float, metas:float, gastar:float, reserva:float, falta:float, livre:float,
+     *   veio:float, entradas:float, reservaMeta:float}
+     *   livre = o que fica na conta no fim do mês sem o adiantamento automático do empréstimo (gastar + reserva − falta);
+     *   veio + entradas = total (o que veio do mês anterior e o que entra no mês); reservaMeta = a reserva de Ajustes
      */
     public static function doMes(array $dados, array $linha, string $mesHoje, ?string $hoje = null): ?array
     {
@@ -67,7 +69,57 @@ final class Destino
             'total' => $total, 'saiu' => $saiu, 'contas' => $contas, 'metas' => $metas,
             'gastar' => round(max(0.0, $livre - $reserva), 2), 'reserva' => round(max(0.0, min($reserva, $livre)), 2),
             'falta' => round(max(0.0, -$livre), 2), 'livre' => $livre,
+            'veio' => round((float) $linha['sobrou_mes_anterior'], 2), 'entradas' => round($total - (float) $linha['sobrou_mes_anterior'], 2),
+            'reservaMeta' => round($reserva, 2),
         ];
+    }
+
+    /**
+     * O livro-caixa do mês, no Início (o dono achou a legenda de cinco cores difícil de ler de relance): a conta da
+     * resposta em linhas, como um extrato, e a barra com as mesmas partes. O dinheiro do mês, menos o que já saiu,
+     * menos o que ainda vai sair (contas a pagar e o que falta das metas, numa linha só), menos a reserva quando ela
+     * cabe, dá a última linha: "Dá para gastar" (em azul, a resposta), ou "Fecha com" quando não sobra nada para gastar
+     * (abaixo da reserva, ou negativo no vermelho). Linha zerada não aparece. Os números são os de doMes(): nenhum novo.
+     * Só rótulo e número, sem nota embaixo: o dono não quer subtexto ("quando tem muito texto fica na cara que foi
+     * feito com IA").
+     * @param array $d Destino::doMes()
+     * @return array{estado:string, linhas:list<array{rotulo:string, valor:float, classe:string}>,
+     *   fim:array{rotulo:string, valor:float, classe:string, tom:string}, segmentos:list<array>}
+     *   estado: gastar | justo | abaixo | vermelho; segmentos: para partials/destino (só a barra), na ordem das linhas
+     */
+    public static function livro(array $d, string $mes): array
+    {
+        $vaiSair = round($d['contas'] + $d['metas'], 2);
+        $estado = $d['falta'] > 0.004 ? 'vermelho'
+            : ($d['gastar'] > 0.004 ? 'gastar' : ($d['livre'] < (float) ($d['reservaMeta'] ?? 0.0) - 0.004 ? 'abaixo' : 'justo'));
+        $linhas = [['rotulo' => t('Dinheiro de {mes}', ['mes' => mesExtenso($mes)]), 'valor' => (float) $d['total'], 'classe' => '']];
+        if ($d['saiu'] >= 0.005) {
+            $linhas[] = ['rotulo' => t('Já saiu'), 'valor' => -(float) $d['saiu'], 'classe' => 's-saiu'];
+        }
+        if ($vaiSair >= 0.005) {
+            $linhas[] = ['rotulo' => t('Ainda vai sair'), 'valor' => -$vaiSair, 'classe' => 's-previsto'];
+        }
+        $comReserva = in_array($estado, ['gastar', 'justo'], true) && $d['reserva'] >= 0.005;
+        if ($comReserva) {
+            $linhas[] = ['rotulo' => t('Fica de reserva'), 'valor' => -(float) $d['reserva'], 'classe' => 's-reserva'];
+        }
+        $fim = match ($estado) {
+            'vermelho' => ['rotulo' => t('Fecha com'), 'valor' => -(float) $d['falta'], 'classe' => 's-falta', 'tom' => 'alerta'],
+            'abaixo'   => ['rotulo' => t('Fecha com'), 'valor' => (float) $d['livre'], 'classe' => 's-reserva', 'tom' => 'atencao'],
+            default    => ['rotulo' => t('Dá para gastar'), 'valor' => (float) $d['gastar'], 'classe' => 's-gastar', 'tom' => 'azul'],
+        };
+        // a barra: as mesmas partes, na escala do dinheiro do mês; no vermelho, o que passa dele é a falta (a barra a desenha)
+        $segmentos = [
+            ['rotulo' => t('Já saiu'), 'valor' => (float) $d['saiu'], 'classe' => 's-saiu'],
+            ['rotulo' => t('Ainda vai sair'), 'valor' => $vaiSair, 'classe' => 's-previsto'],
+        ];
+        if ($estado === 'gastar') {
+            $segmentos[] = ['rotulo' => t('Dá para gastar'), 'valor' => (float) $d['gastar'], 'classe' => 's-gastar'];
+        }
+        if ($comReserva || $estado === 'abaixo') {
+            $segmentos[] = ['rotulo' => $estado === 'abaixo' ? t('Fecha com') : t('Fica de reserva'), 'valor' => (float) ($estado === 'abaixo' ? $d['livre'] : $d['reserva']), 'classe' => 's-reserva'];
+        }
+        return ['estado' => $estado, 'linhas' => $linhas, 'fim' => $fim, 'segmentos' => $segmentos];
     }
 
     /**

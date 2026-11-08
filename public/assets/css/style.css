@@ -60,6 +60,8 @@
     --seg-metas: #A8B3C3;
     --seg-gastar: var(--azul);
     --seg-reserva: var(--superficie);
+    --seg-previsto: var(--seg-contas);        /* o que ainda vai sair: listras na cor das contas (o previsto tracejado) */
+    --seg-previsto-fundo: var(--realce);
     /* sombra: só o painel do mês e o que flutua */
     --sombra-painel: 0 30px 60px -24px #32325D33, 0 18px 36px -18px #0000001A;
     --sombra-flutua: 0 16px 40px -12px #0E1B2E40, 0 2px 6px -2px #0E1B2E1F;
@@ -559,8 +561,16 @@ kbd {
 .s-metas { background: var(--seg-metas); }
 .s-gastar { background: var(--seg-gastar); }
 .s-reserva { background: var(--seg-reserva); box-shadow: inset 0 0 0 1.5px var(--fio-forte); }
-/* no vermelho: a falta não é parte da barra; na legenda, o quadrado vazio e o valor com "−" em vermelho */
-.s-falta { background: transparent; box-shadow: inset 0 0 0 1.5px var(--alerta); }
+.s-previsto { background: repeating-linear-gradient(135deg, var(--seg-previsto) 0 3px, var(--seg-previsto-fundo) 3px 6px); }
+/* no vermelho: a falta é o que passa do dinheiro do mês, hachurada em vermelho na barra e no quadrado da legenda */
+.s-falta { background: repeating-linear-gradient(135deg, var(--alerta) 0 2px, transparent 2px 5px); box-shadow: inset 0 0 0 1.5px var(--alerta); }
+/* a escala da barra é o dinheiro do mês: a marca mostra onde ele acaba, e o que passa dela é a falta */
+.barra-caixa { position: relative; }
+.barra-falta {
+    position: absolute; inset: -4px 0 -4px calc(var(--ate, 1) * 100%); border-left: 2px solid var(--alerta);
+    border-radius: 0 var(--raio-controle) var(--raio-controle) 0; pointer-events: none;
+    background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--alerta) 75%, transparent) 0 2px, transparent 2px 6px);
+}
 .legenda { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: var(--e-4); }
 .legenda li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; column-gap: var(--e-2); align-items: center; min-height: 40px; border-bottom: 1px solid var(--fio); }
 .legenda li:last-child { border-bottom: 0; }

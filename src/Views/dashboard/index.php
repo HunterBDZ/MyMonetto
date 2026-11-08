@@ -31,44 +31,28 @@ $apoio   = substr($hoje, 0, 7) === substr($mesRef, 0, 7)
     ? $diaSem . ', ' . t('dia {dia} de {dias}', ['dia' => (int) date('j', $tsHoje), 'dias' => diasNoMes($mesRef)])
     : $diaSem . ', ' . t('{dia} de {mes}', ['dia' => (int) date('j', $tsHoje), 'mes' => mesExtenso($hoje)]);
 
-// a resposta: até quando, quanto e, numa linha, quanto dá por dia
+// a resposta: o rótulo e o número, nada mais (o dono não quer subtexto). Sem nada para gastar, a resposta é como o mês
+// fecha: com sinal, em âmbar abaixo da reserva e em vermelho no negativo. A conta fica no livro-caixa ao lado.
 $noMesHoje = $mesPrevisao === $mesCal;
-$fimDia    = diasNoMes($mesPrevisao);
-$varsAte   = ['dia' => $fimDia, 'mes' => mesExtenso($mesPrevisao)];
+$varsAte   = ['dia' => diasNoMes($mesPrevisao), 'mes' => mesExtenso($mesPrevisao)];
 $mesFrase  = mb_convert_case(mesExtenso($mesPrevisao), MB_CASE_TITLE);
 $rotulo = t('Em conta hoje');
 $numero = valor($conta, 'neutro', ['moeda' => true]);
-$apoioResposta = '';
 $tipo = $resposta['tipo'] ?? 'conta';
 if ($resposta !== null) {
     $v = (float) $resposta['valor'];
     switch ($tipo) {
         case 'vermelho':
-            $rotulo = $noMesHoje ? t('Falta para zerar até dia {dia}', $varsAte) : t('Falta para zerar até o fim de {mes}', $varsAte);
-            $numero = valor($v, 'neutro', ['moeda' => true, 'classe' => 'alerta']);
-            $apoioResposta = e(t('{mes} fecha no vermelho.', ['mes' => $mesFrase]));
+            $rotulo = t('{mes} fecha com', ['mes' => $mesFrase]);
+            $numero = valor(-$v, 'neutro', ['moeda' => true, 'classe' => 'alerta']);
             break;
         case 'abaixo':
-            $rotulo = $noMesHoje ? t('Falta para a reserva até dia {dia}', $varsAte) : t('Falta para a reserva até o fim de {mes}', $varsAte);
-            $numero = valor($v, 'neutro', ['moeda' => true, 'classe' => 'atencao']);
-            $apoioResposta = e(t('{mes} fecha abaixo da reserva de {valor}.', ['mes' => $mesFrase, 'valor' => money($reserva)]));
+            $rotulo = t('{mes} fecha com', ['mes' => $mesFrase]);
+            $numero = valor(round($reserva - $v, 2), 'neutro', ['moeda' => true, 'classe' => 'atencao']);
             break;
         default:
             $rotulo = $noMesHoje ? t('Dá para gastar até dia {dia}', $varsAte) : t('Dá para gastar até o fim de {mes}', $varsAte);
             $numero = valor($v, 'neutro', ['moeda' => true]);
-            if ($tipo === 'justo') {
-                $apoioResposta = e($reserva > 0.004 ? t('{mes} fecha na reserva, sem folga.', ['mes' => $mesFrase]) : t('{mes} fecha sem folga.', ['mes' => $mesFrase]));
-            } else {
-                // os dias que faltam contando hoje (hoje ainda dá para gastar); num mês que ainda não começou, todos os
-                // dias dele. No último dia, o valor inteiro é para hoje
-                $dias = $noMesHoje ? $fimDia - (int) date('j', $tsHoje) + 1 : $fimDia;
-                $porDiaV = ['valor' => '<b class="num">' . e(money($v / max(1, $dias))) . '</b>'];
-                $apoioResposta = match (true) {
-                    $noMesHoje && $dias <= 1 => t('Hoje é o último dia do mês: {valor} para hoje.', $porDiaV),
-                    $noMesHoje => t('Cerca de {valor} por dia nos {n} dias que faltam, contando hoje.', $porDiaV + ['n' => $dias]),
-                    default => t('Cerca de {valor} por dia nos {n} dias do mês.', $porDiaV + ['n' => $dias]),
-                };
-            }
     }
 }
 
@@ -143,18 +127,17 @@ $vazio = !$temLancamento && ($destino === null || $destino['total'] < 0.005);
     </section>
 <?php else: ?>
 
-    <!-- a resposta: quanto dá para gastar e para onde vai o dinheiro do mês -->
+    <!-- a resposta e, ao lado, a conta dela: a barra do dinheiro do mês e o livro-caixa que a explica -->
     <section class="faixa-grade" aria-labelledby="ini-resposta-t">
         <div class="painel ini-painel" data-resposta="<?= e($tipo) ?>">
-            <h2 class="rot-resposta" id="ini-resposta-t"><?= e($rotulo) ?> <?= dica('gastar', t('esse valor')) ?></h2>
-            <p class="resposta-num"><?= $numero ?></p>
-            <?php if ($apoioResposta !== ''): ?><p class="por-dia"><?= $apoioResposta ?></p><?php endif; ?>
-            <?php if ($destino !== null && $destino['total'] >= 0.005): ?>
+            <div class="ini-resposta">
+                <h2 class="rot-resposta" id="ini-resposta-t"><?= e($rotulo) ?> <?= in_array($tipo, ['vermelho', 'abaixo'], true) ? dica('fecha', t('esse valor')) : dica('gastar', t('esse valor')) ?></h2>
+                <p class="resposta-num"><?= $numero ?></p>
+            </div>
+            <?php if ($destino !== null && $destino['total'] >= 0.005): $livro = Destino::livro($destino, $mesPrevisao); ?>
                 <div class="ini-destino" data-destino data-mov-barra="ini-<?= e($mesPrevisao) ?>" data-mov-dia="<?= e($hoje) ?>" data-total="<?= e(number_format($destino['total'], 2, '.', '')) ?>" data-gastar="<?= e(number_format($destino['gastar'], 2, '.', '')) ?>">
-                    <?php View::partial('partials/destino', [
-                        'titulo' => t('Para onde vai o dinheiro de {mes}', ['mes' => mesExtenso($mesPrevisao)]),
-                        'segmentos' => Destino::segmentos($destino), 'total' => $destino['total'], 'nivel' => 'h3',
-                    ]); ?>
+                    <?php View::partial('partials/destino', ['segmentos' => $livro['segmentos'], 'total' => $destino['total'], 'legenda' => false]); ?>
+                    <?php View::partial('partials/livro_mes', ['livro' => $livro, 'titulo' => t('A conta de {mes}', ['mes' => mesExtenso($mesPrevisao)])]); ?>
                 </div>
             <?php endif; ?>
         </div>

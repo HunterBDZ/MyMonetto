@@ -5,9 +5,27 @@
    Nada de caixa: fio, espaço e tom. Sombra só no painel.
    ========================================================================== */
 
-/* ---- o painel: o rótulo, o número grande, uma linha de apoio e a barra */
+/* ---- o painel: a resposta (o rótulo, o número grande e uma linha de apoio) e a conta dela: a barra e o livro-caixa */
 .ini-painel .rot-resposta .dica { color: var(--tinta-3); }
 .ini-destino { margin-top: var(--e-6); padding-top: var(--e-5); border-top: 1px solid var(--fio); }
+
+/* o livro-caixa (partials/livro_mes): rótulo à esquerda, valor à direita, a soma debaixo de um fio de 2px; sem nota */
+.livro-mes { width: 100%; margin-top: var(--e-4); border-collapse: collapse; }
+.livro-mes th { padding: var(--e-2) var(--e-4) var(--e-2) 0; font-weight: 400; text-align: left; vertical-align: top; }
+.livro-mes td {
+    padding: var(--e-2) 0; text-align: right; vertical-align: top; white-space: nowrap; color: var(--tinta);
+    font: 300 var(--t-corpo)/var(--lh-corpo) var(--f-num); letter-spacing: -.01em; font-variant-numeric: tabular-nums lining-nums;
+}
+.livro-mes tbody tr + tr > * { border-top: 1px solid var(--fio); }
+.livro-mes-rot { display: inline-flex; align-items: center; gap: var(--e-2); font-size: var(--t-rotulo); line-height: var(--lh-rotulo); color: var(--tinta-2); }
+.livro-mes-rot i { flex: none; width: 12px; height: 12px; border-radius: 3px; }
+.livro-mes-base .livro-mes-rot { font-weight: 600; color: var(--tinta); }
+.livro-mes tfoot tr > * { padding-top: var(--e-3); border-top: 2px solid var(--tinta); vertical-align: baseline; }
+.livro-mes-fim .livro-mes-rot { font-weight: 600; color: var(--tinta); }
+.livro-mes-fim td { font: 400 var(--t-titulo)/var(--lh-titulo) var(--f-num); }
+.livro-mes-fim.tom-azul td, .livro-mes-fim.tom-azul .livro-mes-rot { color: var(--azul); }
+.livro-mes-fim.tom-alerta td { color: var(--alerta); }
+.livro-mes-fim.tom-atencao td { color: var(--atencao); }
 
 /* ---- a faixa de números: o olho que esconde os valores fica ao lado de "Em conta hoje" */
 .ini-numeros dt { display: flex; align-items: center; gap: var(--e-2); min-height: 20px; }
@@ -84,7 +102,9 @@
 
 /* ---- computador */
 @media (min-width: 1024px) {
-    .ini-destino { margin-top: var(--e-7); padding-top: 0; border-top: 0; }
+    /* a resposta à esquerda e a conta dela à direita */
+    .ini-painel { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); column-gap: var(--e-8); align-items: start; }
+    .ini-destino { margin-top: 0; padding-top: 0; border-top: 0; }
     .ini-aten { padding-block: var(--e-5); }
     .ini-aten .aten-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); column-gap: var(--e-6); }
     .ini-aten .aten-lista > li + li { border-top: 0; }
